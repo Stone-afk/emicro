@@ -7,7 +7,7 @@ import (
 	"reflect"
 )
 
-func InitClientProxy(address string, srv service) error {
+func InitClientProxy(address string, srv Service) error {
 	c, err := NewClient(address)
 	if err != nil {
 		return err
@@ -20,7 +20,7 @@ func InitClientProxy(address string, srv service) error {
 }
 
 // 这个单独的拆出来，就是为了测试，可以考虑传入一个 mock proxy
-func setFuncField(srv service, p Proxy) error {
+func setFuncField(srv Service, p Proxy) error {
 	val := reflect.ValueOf(srv)
 	valElem := val.Elem()
 	typElem := valElem.Type()

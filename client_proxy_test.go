@@ -95,7 +95,7 @@ func (p *mockProxy) Invoke(ctx context.Context, req *Request) (*Response, error)
 }
 
 type mockService struct {
-	s  service
+	s  Service
 	do func() (any, error)
 }
 

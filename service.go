@@ -1,5 +1,5 @@
 package emicro
 
-type service interface {
+type Service interface {
 	ServiceName() string
 }
