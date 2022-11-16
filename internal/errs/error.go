@@ -3,5 +3,7 @@ package errs
 import "errors"
 
 var (
-	ServiceTypError = errors.New("服务类型必须为一级指针")
+	ServiceTypError   = errors.New("service type must be a first level pointer")
+	ReadLenDataError  = errors.New("could not read the length data")
+	ReadRespFailError = errors.New("unable to read response")
 )

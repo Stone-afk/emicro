@@ -61,7 +61,7 @@ func setFuncField(srv service, p Proxy) error {
 			// 例如: 当 err 为 nil 时 reflect.Zero(err) 就是不带类型的 nil 值
 			// 只能 reflect.Zero(reflect.TypeOf(new(目标类型))).Elem()
 			//  reflect.Zero(reflect.ValueOf(new(目标类型))) 行不行 ???
-			nilErr := reflect.Zero(reflect.TypeOf(new(error))).Elem()
+			nilErr := reflect.Zero(reflect.TypeOf(new(error)).Elem())
 			return []reflect.Value{reflect.ValueOf(out), nilErr}
 		}
 		fieldVal.Set(reflect.MakeFunc(fieldTyp.Type, fn))
