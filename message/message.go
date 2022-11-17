@@ -1,14 +1,12 @@
-package emicro
+package message
 
 type Request struct {
-	// for scalability
 	ServiceName string
 	Method      string
-	// request itself
-	Data []byte
+	Data        []byte
 }
 
 type Response struct {
-	Data  []byte
 	Error string
+	Data  []byte
 }

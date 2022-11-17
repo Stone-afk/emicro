@@ -3,74 +3,100 @@ package emicro
 import (
 	"context"
 	"emicro/internal/errs"
+	"emicro/message"
 	"encoding/json"
-	"fmt"
 	"github.com/silenceper/pool"
 	"net"
+	"reflect"
 	"time"
 )
 
+// Client -> tcp conn client
 type Client struct {
 	connPool pool.Pool
 }
 
-type Proxy interface {
-	Invoke(ctx context.Context, req *Request) (*Response, error)
+// Invoke -> invoke rpc service
+func (c *Client) Invoke(ctx context.Context, request *message.Request) (*message.Response, error) {
+	return &message.Response{}, nil
 }
 
+// NewClient -> create Client
 func NewClient(address string) (*Client, error) {
-	// Create a connection pool: Initialize the number of connections to 5,
-	//the maximum idle connection is 20, and the maximum concurrent connection is 30
 	poolConfig := &pool.Config{
-		//连接池中拥有的最小连接数
 		InitialCap: 5,
-		//最大并发存活连接数
-		MaxCap: 30,
-		//最大空闲连接
-		MaxIdle: 20,
+		MaxIdle:    20,
+		MaxCap:     30,
 		Factory: func() (interface{}, error) {
 			return net.Dial("tcp", address)
 		},
-		Close: func(v interface{}) error {
-			return v.(net.Conn).Close()
+		Close: func(i interface{}) error {
+			return i.(net.Conn).Close()
 		},
-		//连接最大空闲时间，超过该事件则将失效
 		IdleTimeout: time.Minute,
 	}
 	connPool, err := pool.NewChannelPool(poolConfig)
 	if err != nil {
 		return nil, err
 	}
-	client := &Client{
-		connPool: connPool,
-	}
-	return client, nil
+	return &Client{connPool: connPool}, nil
+
 }
 
-func (c *Client) Invoke(ctx context.Context, req *Request) (*Response, error) {
-	conn, err := c.connPool.Get()
+// InitProxyClient -> init client proxy
+func InitProxyClient(address string, srv Service) error {
+	client, err := NewClient(address)
 	if err != nil {
-		return nil, fmt.Errorf("client: 无法获得获取一个可用连接 %w", err)
+		return err
 	}
-	// put back
-	defer func() {
-		_ = c.connPool.Put(conn)
-	}()
-	cn := conn.(net.Conn)
-	bs, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("client: 无法序列化请求, %w", err)
+	if err = setFuncField(srv, client); err != nil {
+		return err
 	}
-	encode := EncodeMsg(bs)
-	_, err = cn.Write(encode)
-	if err != nil {
-		return nil, err
+	return nil
+}
+
+// setFuncField
+func setFuncField(s Service, p Proxy) error {
+	srvValElem := reflect.ValueOf(s).Elem()
+	srvTypElem := srvValElem.Type()
+	if srvTypElem.Kind() == reflect.Ptr {
+		return errs.ServiceTypError
 	}
-	bs, err = ReadMsg(cn)
-	if err != nil {
-		return nil, errs.ReadRespFailError
+
+	numField := srvTypElem.NumField()
+	for i := 0; i < numField; i++ {
+		fieldTyp := srvTypElem.Field(i)
+		fieldVal := srvValElem.Field(i)
+
+		if !fieldVal.CanSet() {
+			continue
+		}
+		fn := func(args []reflect.Value) (results []reflect.Value) {
+			ctx := args[0].Interface().(context.Context)
+			in := args[1].Interface()
+			out := reflect.New(fieldTyp.Type.Out(0).Elem()).Interface()
+			reqData, err := json.Marshal(in)
+			if err != nil {
+				return []reflect.Value{reflect.ValueOf(out), reflect.ValueOf(err)}
+			}
+			req := &message.Request{
+				ServiceName: s.ServiceName(),
+				Method:      fieldTyp.Name,
+				Data:        reqData,
+			}
+			resp, err := p.Invoke(ctx, req)
+			if err != nil {
+				return []reflect.Value{reflect.ValueOf(out), reflect.ValueOf(err)}
+			}
+			err = json.Unmarshal(resp.Data, out)
+			if err != nil {
+				return []reflect.Value{reflect.ValueOf(out), reflect.ValueOf(err)}
+			}
+			// nilErr := reflect.Zero(reflect.TypeOf(new(error)).Elem())
+			return []reflect.Value{reflect.ValueOf(out), reflect.Zero(reflect.TypeOf(new(error)).Elem())}
+		}
+		fieldVal.Set(reflect.MakeFunc(fieldTyp.Type, fn))
 	}
-	resp := &Response{}
-	err = json.Unmarshal(bs, resp)
-	return resp, err
+	return nil
+
 }

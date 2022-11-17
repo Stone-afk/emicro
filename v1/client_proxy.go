@@ -1,8 +1,10 @@
+//go:build v1
+
 package emicro
 
 import (
 	"context"
-	"emicro/internal/errs"
+	"emicro/v1/internal/errs"
 	"encoding/json"
 	"reflect"
 )
@@ -31,6 +33,7 @@ func setFuncField(srv Service, p Proxy) error {
 	for i := 0; i < numField; i++ {
 		fieldTyp := typElem.Field(i)
 		fieldVal := valElem.Field(i)
+
 		if !fieldVal.CanSet() {
 			continue
 		}

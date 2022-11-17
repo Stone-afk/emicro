@@ -1,7 +1,9 @@
+//go:build v1
+
 package emicro
 
 import (
-	"emicro/internal/errs"
+	"emicro/v1/internal/errs"
 	"encoding/binary"
 	"errors"
 	"fmt"
