@@ -5,6 +5,7 @@ import (
 	"emicro/internal/errs"
 	"emicro/message"
 	"encoding/json"
+	"fmt"
 	"github.com/silenceper/pool"
 	"net"
 	"reflect"
@@ -14,11 +15,6 @@ import (
 // Client -> tcp conn client
 type Client struct {
 	connPool pool.Pool
-}
-
-// Invoke -> invoke rpc service
-func (c *Client) Invoke(ctx context.Context, request *message.Request) (*message.Response, error) {
-	return &message.Response{}, nil
 }
 
 // NewClient -> create Client
@@ -99,4 +95,36 @@ func setFuncField(s Service, p Proxy) error {
 	}
 	return nil
 
+}
+
+// Invoke -> invoke rpc service
+func (c *Client) Invoke(ctx context.Context, req *message.Request) (*message.Response, error) {
+	val, err := c.connPool.Get()
+	if err != nil {
+		return nil, fmt.Errorf("client: unable to get an available connection %w", err)
+	}
+	// put back
+	defer func() {
+		_ = c.connPool.Put(val)
+	}()
+	conn := val.(net.Conn)
+	reqBs, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("client: unable to serialize request, %w", err)
+	}
+	encode := EncodeMsg(reqBs)
+	_, err = conn.Write(encode)
+	if err != nil {
+		return nil, err
+	}
+	data, err := ReadMsg(conn)
+	if err != nil {
+		return nil, errs.ReadRespFailError
+	}
+	resp := &message.Response{}
+	err = json.Unmarshal(data, resp)
+	if err != nil {
+		return nil, fmt.Errorf("client: unable to deserialize response, %w", err)
+	}
+	return resp, nil
 }
