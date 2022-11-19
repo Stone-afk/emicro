@@ -117,7 +117,7 @@ type reflectionStub struct {
 // Invoke -> stub execute method by reflect
 func (s *reflectionStub) Invoke(ctx context.Context, methodName string, reqData []byte) ([]byte, error) {
 	method := s.value.MethodByName(methodName)
-	in := reflect.New(method.Type().In(1))
+	in := reflect.New(method.Type().In(1).Elem())
 	err := json.Unmarshal(reqData, in.Interface())
 	if err != nil {
 		return nil, err

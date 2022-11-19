@@ -37,6 +37,6 @@ func EncodeMsg(msg []byte) []byte {
 	encode := make([]byte, lenBytes+len(msg))
 	//  int -> unint64 -> bytes
 	binary.BigEndian.PutUint64(encode[:lenBytes], uint64(len(msg)))
-	copy(msg, encode[lenBytes:])
+	copy(encode[lenBytes:], msg)
 	return encode
 }
