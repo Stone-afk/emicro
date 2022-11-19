@@ -39,8 +39,8 @@ func NewClient(address string) (*Client, error) {
 
 }
 
-// InitProxyClient -> init client proxy
-func InitProxyClient(address string, srv Service) error {
+// InitClientProxy -> init client proxy
+func InitClientProxy(address string, srv Service) error {
 	client, err := NewClient(address)
 	if err != nil {
 		return err
