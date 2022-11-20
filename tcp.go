@@ -25,18 +25,23 @@ func ReadMsg(conn net.Conn) (bs []byte, err error) {
 	if length != lenBytes {
 		return nil, errs.ReadLenDataError
 	}
-	//  bytes -> unint64
-	dataLen := binary.BigEndian.Uint64(lenBs)
-	bs = make([]byte, dataLen)
-	_, err = conn.Read(bs)
+	//  bytes -> unint32
+	//  get head length
+	headLength := binary.BigEndian.Uint32(lenBs[:4])
+	//  get body length
+	bodyLength := binary.BigEndian.Uint32(lenBs[4:8])
+	// read all data
+	bs = make([]byte, headLength+bodyLength)
+	_, err = conn.Read(bs[lenBytes:])
 	// _, err = io.ReadFull(conn, bs)
+	copy(bs[:lenBytes], lenBs)
 	return bs, err
 }
 
-func EncodeMsg(msg []byte) []byte {
-	encode := make([]byte, lenBytes+len(msg))
-	//  int -> unint64 -> bytes
-	binary.BigEndian.PutUint64(encode[:lenBytes], uint64(len(msg)))
-	copy(encode[lenBytes:], msg)
-	return encode
-}
+//func EncodeMsg(msg []byte) []byte {
+//	encode := make([]byte, lenBytes+len(msg))
+//	//  int -> unint64 -> bytes
+//	binary.BigEndian.PutUint64(encode[:lenBytes], uint64(len(msg)))
+//	copy(encode[lenBytes:], msg)
+//	return encode
+//}

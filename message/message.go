@@ -1,14 +1,310 @@
 package message
 
+import (
+	"bytes"
+	"encoding/binary"
+)
+
+const (
+	splitter     = '\n'
+	pairSplitter = '\r'
+)
+
 // Request ->
 type Request struct {
+	// 头部
+	// 消息头长度
+	HeadLength uint32
+	// 消息体长度
+	BodyLength uint32
+	// 消息 ID
+	MessageId uint32
+	// 版本，一个字节
+	Version uint8
+	// 压缩算法
+	Compresser uint8
+	// 序列化协议
+	Serializer uint8
+
+	// 服务名和方法名
 	ServiceName string
 	Method      string
-	Data        []byte
+
+	// 扩展字段，用于传递自定义元数据
+	Meta map[string]string
+
+	// 协议 请求体 / 请求数据
+	Data []byte
+}
+
+//func (r *Request) SetHeadLengthV1() {
+//	// 固定部分
+//	res := 15
+//	res += len(r.ServiceName)
+//
+//	// 分隔符
+//	res++
+//	res += len(r.Method)
+//
+//	for key, value := range r.Meta {
+//		// 分隔符
+//		res++
+//		res += len(key)
+//		// 键值对分隔符
+//		res++
+//		res += len(value)
+//	}
+//	r.HeadLength = uint32(res)
+//}
+
+// 这种做法意味着，整个请求的壳 req 是 json 来传递的
+// 但是 req.Data 是可以用不同序列化协议的
+// func EncodeReqV1(req *Request) []byte {
+// 	val, _ :=  json.Marshal(req)
+// 	return val
+// }
+
+// 这种做法意味着，整个请求的壳 req 是 gob 序列化的， gob 是 Go专属的，你不能跨语言通信
+// 但是 req.Data 是可以用不同序列化协议的
+// func EncodeReqV2(req *Request) []byte {
+// 	bs := &bytes.Buffer{}
+// 	encoder := gob.NewEncoder(bs)
+// 	_= encoder.Encode(req)
+// 	return bs.Bytes()
+// }
+
+// func (req *Request) EncodeReq()[]byte {}
+
+// SetHeadLength -> calculate and set request head length
+func (req *Request) SetHeadLength() {
+	// 固定部分
+	res := 15
+	res += len(req.ServiceName)
+	// 分隔符
+	res++
+	res += len(req.Method)
+	// 分隔符
+	res++
+	for key, value := range req.Meta {
+		res += len(key)
+		// 键值对分隔符
+		res++
+		res += len(value)
+		// 分隔符
+		res++
+	}
+	req.HeadLength = uint32(res)
+}
+
+// SetBodyLength -> calculate and set request body length
+func (req *Request) SetBodyLength() {
+	req.BodyLength = uint32(len(req.Data))
+}
+
+// EncodeReq -> encoding request
+func EncodeReq(req *Request) []byte {
+	bs := make([]byte, req.HeadLength+req.BodyLength)
+	cur := bs
+
+	// 1. 写入 HeadLength，四个字节
+	binary.BigEndian.PutUint32(cur[:4], req.HeadLength)
+	cur = cur[4:]
+
+	// 2. 写入 BodyLength 四个字节
+	binary.BigEndian.PutUint32(cur[:4], req.BodyLength)
+	cur = cur[4:]
+
+	// 3. 写入 message id, 四个字节
+	binary.BigEndian.PutUint32(cur[:4], req.MessageId)
+	cur = cur[4:]
+
+	// 4. 写入 version，因为本身就是一个字节，所以不用进行编码了
+	cur[0] = req.Version
+	cur = cur[1:]
+
+	// 5. 写入压缩算法
+	cur[0] = req.Compresser
+	cur = cur[1:]
+
+	// 6. 写入序列化协议
+	cur[0] = req.Serializer
+	cur = cur[1:]
+
+	// 7. 写入服务名
+	copy(cur, req.ServiceName)
+	cur[len(req.ServiceName)] = splitter
+	cur = cur[len(req.ServiceName)+1:]
+
+	// 8. 写入方法名
+	copy(cur, req.Method)
+	cur[len(req.Method)] = splitter
+	cur = cur[len(req.Method)+1:]
+
+	if len(req.Meta) > 0 {
+		for key, value := range req.Meta {
+			copy(cur, key)
+			cur[len(key)] = pairSplitter
+			cur = cur[len(key)+1:]
+
+			copy(cur, value)
+			cur[len(value)] = splitter
+			cur = cur[len(value)+1:]
+		}
+	}
+	// 9. 剩下的数据
+	copy(cur, req.Data)
+	return bs
+}
+
+// DecodeReq -> Parse Request
+func DecodeReq(bs []byte) *Request {
+	req := &Request{}
+	// 按照 EncodeReq 写下来
+	// 1. 读取 HeadLength
+	req.HeadLength = binary.BigEndian.Uint32(bs[:4])
+	// 2. 读取 BodyLength
+	req.BodyLength = binary.BigEndian.Uint32(bs[4:8])
+	// 3. 读取 message id
+	req.MessageId = binary.BigEndian.Uint32(bs[8:12])
+	// 4. 读取 Version
+	req.Version = bs[12]
+	// 5. 读取压缩算法
+	req.Compresser = bs[13]
+	// 6. 读取序列化协议
+	req.Serializer = bs[14]
+
+	// 是头部剩余数据
+	head := bs[15:req.HeadLength]
+	// 7. 拆解服务名和方法名
+	index := bytes.IndexByte(head, splitter)
+	req.ServiceName = string(head[:index])
+	// 加1 是为了跳掉分隔符
+	head = head[index+1:]
+
+	index = bytes.IndexByte(head, splitter)
+	req.Method = string(head[:index])
+	// 加1 是为了跳掉分隔符
+	head = head[index+1:]
+
+	// 8. 读取元数据
+	if len(head) > 0 {
+		metaMap := make(map[string]string, 8)
+		index = bytes.IndexByte(head, splitter)
+		// 切出来了
+		for index != -1 {
+			// 一个键值对
+			pair := head[:index]
+			// 切分 key-value
+			// 我们使用 \r 来切分键值对
+			pairIndex := bytes.IndexByte(head, pairSplitter)
+			key := string(pair[:pairIndex])
+			// +1 也是为了跳掉分隔符
+			value := string(pair[pairIndex+1:])
+			metaMap[key] = value
+			// 往前移动 +1 跳掉分隔符
+			head = head[index+1:]
+			index = bytes.IndexByte(head, splitter)
+		}
+		req.Meta = metaMap
+	}
+
+	// 9. 读取协议请求体数据
+	req.Data = bs[req.HeadLength:]
+	return req
 }
 
 // Response ->
 type Response struct {
-	Error string
-	Data  []byte
+	// 响应头长度
+	HeadLength uint32
+	// 响应体长度
+	BodyLength uint32
+	//消息ID
+	MessageId uint32
+	// 协议版本
+	Version uint8
+	// 压缩算法
+	Compresser uint8
+	// 序列化协议
+	Serializer uint8
+	// 错误
+	Error []byte
+	// 你要区分业务 error 还是非业务 error
+	// BizError []byte // 代表的是业务返回的 error
+	// 协议 响应体 / 响应数据
+	Data []byte
+}
+
+// SetHeadLength -> calculate and set response head length
+func (resp *Response) SetHeadLength() {
+	resp.HeadLength = uint32(15 + len(resp.Error))
+}
+
+// SetBodyLength -> calculate and set response body length
+func (resp *Response) SetBodyLength() {
+	resp.BodyLength = uint32(len(resp.Data))
+}
+
+// EncodeResp -> calculate and set response head length
+func EncodeResp(resp *Response) []byte {
+	bs := make([]byte, resp.HeadLength+resp.BodyLength)
+	cur := bs
+
+	// 1. 写入 HeadLength，四个字节
+	binary.BigEndian.PutUint32(cur[:4], resp.HeadLength)
+	cur = cur[4:]
+
+	// 2. 写入 BodyLength 四个字节
+	binary.BigEndian.PutUint32(cur[:4], resp.BodyLength)
+	cur = cur[4:]
+
+	// 3. 写入 message id, 四个字节
+	binary.BigEndian.PutUint32(cur[:4], resp.MessageId)
+	cur = cur[4:]
+
+	// 4. 写入 version，因为本身就是一个字节，所以不用进行编码了
+	cur[0] = resp.Version
+	cur = cur[1:]
+
+	// 5. 写入压缩算法
+	cur[0] = resp.Compresser
+	cur = cur[1:]
+
+	// 6. 写入序列化协议
+	cur[0] = resp.Serializer
+	cur = cur[1:]
+
+	// 7. 写入 error, 写入 Eorror 后不 +1 -> (cur[len(resp.Error)+1:]) 是因为
+	// 直接取头部长度就区分了 head 和 body ， 而 Error 的前一个参数 Serializer 也刚好为 1 字节
+	copy(cur, resp.Error)
+	cur = cur[len(resp.Error):]
+
+	// 8. 剩下的数据
+	copy(cur, resp.Data)
+	return bs
+}
+
+// DecodeResp -> calculate and set response head length
+func DecodeResp(bs []byte) *Response {
+	resp := &Response{}
+	// 1. 读取 HeadLength
+	resp.HeadLength = binary.BigEndian.Uint32(bs[:4])
+	// 2. 读取 BodyLength
+	resp.BodyLength = binary.BigEndian.Uint32(bs[4:8])
+	// 3. 读取 message id
+	resp.MessageId = binary.BigEndian.Uint32(bs[8:12])
+
+	// 4. 读取 Version
+	resp.Version = bs[12]
+	// 5. 读取压缩算法
+	resp.Compresser = bs[13]
+	// 6. 读取序列化协议
+	resp.Serializer = bs[14]
+
+	// 7. error 信息
+	resp.Error = bs[15:resp.HeadLength]
+
+	// 剩下的就是数据了
+	resp.Data = bs[resp.HeadLength:]
+	return resp
 }

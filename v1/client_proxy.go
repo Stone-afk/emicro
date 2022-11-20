@@ -47,6 +47,8 @@ func setFuncField(srv Service, p Proxy) error {
 				return []reflect.Value{reflect.ValueOf(out), reflect.ValueOf(err)}
 			}
 			req := &Request{
+				// 客户端和服务端可能叫不一样的名字, 路径也有可能不一样
+				// ServiceName: typ.PkgPath() + typ.Name(),
 				ServiceName: srv.ServiceName(),
 				Method:      fieldTyp.Name,
 				Data:        inData,

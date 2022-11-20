@@ -6,6 +6,7 @@ import (
 	"emicro/message"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"reflect"
 )
@@ -54,37 +55,44 @@ func (s *Server) Start(address string) error {
 
 // handleConn ->
 func (s *Server) handleConn(conn net.Conn) error {
-	bs, err := ReadMsg(conn)
-	if err != nil {
-		return err
+	for {
+		bs, err := ReadMsg(conn)
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		// go func() {}
+		// req := &message.Request{}
+		//err = json.Unmarshal(bs, req)
+		//if err != nil {
+		//	return fmt.Errorf("server: unable to deserialize request, %w", err)
+		//}
+
+		req := message.DecodeReq(bs)
+		resp := s.Invoke(context.Background(), req)
+
+		//respBs, err := json.Marshal(resp)
+		//if err != nil {
+		//	return fmt.Errorf("server: unable to serialize response, %w", err)
+		//}
+		//encode := EncodeMsg(respBs)
+		//encode, err := s.encodeMsg(resp)
+		//if err != nil {
+		//	return err
+		//}
+
+		// calculate and set the response head length
+		resp.SetHeadLength()
+		// calculate and set the response body length
+		resp.SetBodyLength()
+		encode := message.EncodeResp(resp)
+		_, er := conn.Write(encode)
+		if er != nil {
+			return fmt.Errorf("server: sending response failed: %v", er)
+		}
 	}
-	// go func() {}
-	req := &message.Request{}
-	err = json.Unmarshal(bs, req)
-	if err != nil {
-		return fmt.Errorf("server: unable to deserialize request, %w", err)
-	}
-	resp, err := s.Invoke(context.Background(), req)
-	if resp == nil {
-		resp = &message.Response{}
-	}
-	if err != nil && len(resp.Error) == 0 {
-		resp.Error = err.Error()
-	}
-	respBs, err := json.Marshal(resp)
-	if err != nil {
-		return fmt.Errorf("server: unable to serialize response, %w", err)
-	}
-	encode := EncodeMsg(respBs)
-	//encode, err := s.encodeMsg(resp)
-	//if err != nil {
-	//	return err
-	//}
-	_, er := conn.Write(encode)
-	if er != nil {
-		return fmt.Errorf("server: sending response failed: %v", er)
-	}
-	return nil
 }
 
 //func (s *Server) encodeMsg(msg any) ([]byte, error) {
@@ -96,16 +104,24 @@ func (s *Server) handleConn(conn net.Conn) error {
 //}
 
 // Invoke -> server Invoke
-func (s *Server) Invoke(ctx context.Context, req *message.Request) (*message.Response, error) {
+func (s *Server) Invoke(ctx context.Context, req *message.Request) *message.Response {
 	stub, ok := s.services[req.ServiceName]
 	if !ok {
-		return nil, errs.InvalidServiceName
+		return &message.Response{Error: []byte(errs.InvalidServiceName.Error())}
 	}
+
 	data, err := stub.Invoke(ctx, req.Method, req.Data)
 	if err != nil {
-		return nil, err
+		return &message.Response{Error: []byte(err.Error())}
 	}
-	return &message.Response{Data: data}, nil
+	response := &message.Response{
+		Version:    req.Version,
+		Compresser: req.Compresser,
+		Serializer: req.Serializer,
+		MessageId:  req.MessageId,
+		Data:       data,
+	}
+	return response
 }
 
 // reflectionStub -> service stub

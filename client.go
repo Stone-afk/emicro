@@ -5,12 +5,17 @@ import (
 	"emicro/internal/errs"
 	"emicro/message"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/silenceper/pool"
 	"net"
 	"reflect"
+	"sync/atomic"
 	"time"
 )
+
+// messageId
+var messageId uint32 = 0
 
 // Client -> tcp conn client
 type Client struct {
@@ -76,10 +81,17 @@ func setFuncField(s Service, p Proxy) error {
 				return []reflect.Value{reflect.ValueOf(out), reflect.ValueOf(err)}
 			}
 			req := &message.Request{
+				MessageId:   atomic.AddUint32(&messageId, +1),
+				Compresser:  0,
+				Serializer:  0,
 				ServiceName: s.ServiceName(),
 				Method:      fieldTyp.Name,
 				Data:        reqData,
 			}
+			// calculate and set the request head length
+			req.SetHeadLength()
+			// calculate and set the request body length
+			req.SetBodyLength()
 			resp, err := p.Invoke(ctx, req)
 			if err != nil {
 				return []reflect.Value{reflect.ValueOf(out), reflect.ValueOf(err)}
@@ -108,23 +120,27 @@ func (c *Client) Invoke(ctx context.Context, req *message.Request) (*message.Res
 		_ = c.connPool.Put(val)
 	}()
 	conn := val.(net.Conn)
-	reqBs, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("client: unable to serialize request, %w", err)
-	}
-	encode := EncodeMsg(reqBs)
-	_, err = conn.Write(encode)
+	//reqBs, err := json.Marshal(req)
+	//if err != nil {
+	//	return nil, fmt.Errorf("client: unable to serialize request, %w", err)
+	//}
+	//encode := EncodeMsg(reqBs)
+	encode := message.EncodeReq(req)
+	l, err := conn.Write(encode)
 	if err != nil {
 		return nil, err
+	}
+	if l != len(encode) {
+		return nil, errors.New("micro: 未写入全部数据")
 	}
 	data, err := ReadMsg(conn)
 	if err != nil {
 		return nil, errs.ReadRespFailError
 	}
-	resp := &message.Response{}
-	err = json.Unmarshal(data, resp)
-	if err != nil {
-		return nil, fmt.Errorf("client: unable to deserialize response, %w", err)
-	}
-	return resp, nil
+	// resp := &message.Response{}
+	//err = json.Unmarshal(data, resp)
+	//if err != nil {
+	//	return nil, fmt.Errorf("client: unable to deserialize response, %w", err)
+	//}
+	return message.DecodeResp(data), nil
 }

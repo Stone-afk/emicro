@@ -33,11 +33,7 @@ func TestServer_handleConnection(t *testing.T) {
 		server.RegisterService(tc.service)
 		err := server.handleConn(tc.conn)
 		require.NoError(t, err)
-		// 比较写入的数据，去掉长度字段
-		data := tc.conn.writeData[8:]
-		resp := &message.Response{}
-		err = json.Unmarshal(data, resp)
-		require.NoError(t, err)
+		resp := message.DecodeResp(tc.conn.writeData)
 		assert.Equal(t, tc.wantResp, resp.Data)
 
 	}
@@ -74,9 +70,9 @@ func newRequestBytes(t *testing.T, service string, method string, input any) []b
 		Method:      method,
 		Data:        data,
 	}
-	reqData, err := json.Marshal(req)
-	require.NoError(t, err)
-	return EncodeMsg(reqData)
+	req.SetHeadLength()
+	req.SetBodyLength()
+	return message.EncodeReq(req)
 }
 
 func (m *mockConn) Read(bs []byte) (int, error) {
@@ -96,19 +92,3 @@ func (m *mockConn) Write(bs []byte) (int, error) {
 	m.writeData = append(m.writeData, bs...)
 	return len(bs), m.writeErr
 }
-
-// 客户端
-// 1. 首先反射拿到 Request，核心是服务名字，方法名字和参数
-// 2. 将 Request 进行编码，要注意序列化并且加上长度字段
-// 3. 使用连接池，或者一个连接，把请求发过去
-// 4. 从连接里面读取响应，解析成结构体
-
-// 服务端
-// 1. 启动一个服务器，监听一个端口
-// 2. 读取长度字段，再根据长度，读完整个消息
-// 3. 解析成 Request
-// 4. 查找服务，会对应的方法
-// 5. 构造方法对应的输入
-// 6. 反射执行调用
-// 7. 编码响应
-// 8. 写回响应

@@ -10,7 +10,7 @@ import (
 )
 
 func TestNewClient(t *testing.T) {
-	c, err := NewClient(":8081")
+	c, err := NewClient(":8082")
 	require.NoError(t, err)
 	us := &UserServiceClient{}
 	err = setFuncField(us, c)
