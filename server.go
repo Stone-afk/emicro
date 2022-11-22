@@ -18,6 +18,14 @@ type Server struct {
 	serializers []serialize.Serializer
 }
 
+// MustRegister -> panic error
+func (s *Server) MustRegister(service Service) {
+	err := s.RegisterService(service)
+	if err != nil {
+		panic(err)
+	}
+}
+
 // NewServer instance
 func NewServer() *Server {
 	res := &Server{
@@ -31,12 +39,13 @@ func NewServer() *Server {
 }
 
 // RegisterService -> Service stub
-func (s *Server) RegisterService(service Service) {
+func (s *Server) RegisterService(service Service) error {
 	s.services[service.ServiceName()] = &reflectionStub{
 		s:           service,
 		serializers: s.serializers,
 		value:       reflect.ValueOf(service),
 	}
+	return nil
 }
 
 // RegisterSerializer -> register serializer

@@ -11,7 +11,7 @@ import (
 func TestServer_Start(t *testing.T) {
 	s := NewServer()
 	s.RegisterService(&UserServiceServer{})
-	err := s.Start(":8082")
+	err := s.Start(":8085")
 	require.NoError(t, err)
 }
 
