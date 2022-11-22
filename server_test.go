@@ -30,8 +30,9 @@ func TestServer_handleConnection(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		server := NewServer()
-		server.RegisterService(tc.service)
-		err := server.handleConn(tc.conn)
+		err := server.RegisterService(tc.service)
+		require.NoError(t, err)
+		err = server.handleConn(tc.conn)
 		require.NoError(t, err)
 		resp := message.DecodeResp(tc.conn.writeData)
 		assert.Equal(t, tc.wantResp, resp.Data)
