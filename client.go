@@ -4,9 +4,11 @@ import (
 	"context"
 	"emicro/internal/errs"
 	"emicro/message"
-	"encoding/json"
+	"emicro/serialize"
+	"emicro/serialize/json"
 	"errors"
 	"fmt"
+	"github.com/gotomicro/ekit/bean/option"
 	"github.com/silenceper/pool"
 	"net"
 	"reflect"
@@ -19,11 +21,19 @@ var messageId uint32 = 0
 
 // Client -> tcp conn client
 type Client struct {
-	connPool pool.Pool
+	connPool   pool.Pool
+	serializer serialize.Serializer
+}
+
+// ClientWithSerializer -> option
+func ClientWithSerializer(s serialize.Serializer) option.Option[Client] {
+	return func(client *Client) {
+		client.serializer = s
+	}
 }
 
 // NewClient -> create Client
-func NewClient(address string) (*Client, error) {
+func NewClient(address string, opts ...option.Option[Client]) (*Client, error) {
 	poolConfig := &pool.Config{
 		InitialCap: 5,
 		MaxIdle:    20,
@@ -40,7 +50,14 @@ func NewClient(address string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{connPool: connPool}, nil
+	client := &Client{
+		connPool:   connPool,
+		serializer: json.Serializer{},
+	}
+	for _, opt := range opts {
+		opt(client)
+	}
+	return client, nil
 
 }
 
@@ -50,20 +67,24 @@ func InitClientProxy(address string, srv Service) error {
 	if err != nil {
 		return err
 	}
-	if err = setFuncField(srv, client); err != nil {
+	if err = setFuncField(client.serializer, srv, client); err != nil {
 		return err
 	}
 	return nil
 }
 
+// InitClientProxy -> init client proxy
+func (c *Client) InitClientProxy(srv Service) error {
+	return setFuncField(c.serializer, srv, c)
+}
+
 // setFuncField
-func setFuncField(s Service, p Proxy) error {
-	srvValElem := reflect.ValueOf(s).Elem()
+func setFuncField(serializer serialize.Serializer, service Service, proxy Proxy) error {
+	srvValElem := reflect.ValueOf(service).Elem()
 	srvTypElem := srvValElem.Type()
 	if srvTypElem.Kind() == reflect.Ptr {
 		return errs.ServiceTypError
 	}
-
 	numField := srvTypElem.NumField()
 	for i := 0; i < numField; i++ {
 		fieldTyp := srvTypElem.Field(i)
@@ -75,16 +96,17 @@ func setFuncField(s Service, p Proxy) error {
 		fn := func(args []reflect.Value) (results []reflect.Value) {
 			ctx := args[0].Interface().(context.Context)
 			in := args[1].Interface()
-			out := reflect.New(fieldTyp.Type.Out(0).Elem()).Interface()
-			reqData, err := json.Marshal(in)
+			// out := reflect.New(fieldTyp.Type.Out(0).Elem()).Interface()
+			out := reflect.Zero(fieldTyp.Type.Out(0))
+			reqData, err := serializer.Encode(in)
 			if err != nil {
-				return []reflect.Value{reflect.ValueOf(out), reflect.ValueOf(err)}
+				return []reflect.Value{out, reflect.ValueOf(err)}
 			}
 			req := &message.Request{
 				MessageId:   atomic.AddUint32(&messageId, +1),
 				Compresser:  0,
-				Serializer:  0,
-				ServiceName: s.ServiceName(),
+				Serializer:  serializer.Code(),
+				ServiceName: service.ServiceName(),
 				Method:      fieldTyp.Name,
 				Data:        reqData,
 			}
@@ -92,21 +114,32 @@ func setFuncField(s Service, p Proxy) error {
 			req.SetHeadLength()
 			// calculate and set the request body length
 			req.SetBodyLength()
-			resp, err := p.Invoke(ctx, req)
+			resp, err := proxy.Invoke(ctx, req)
 			if err != nil {
-				return []reflect.Value{reflect.ValueOf(out), reflect.ValueOf(err)}
+				return []reflect.Value{out, reflect.ValueOf(err)}
 			}
-			err = json.Unmarshal(resp.Data, out)
-			if err != nil {
-				return []reflect.Value{reflect.ValueOf(out), reflect.ValueOf(err)}
+			var respErr error
+			if len(resp.Error) > 0 {
+				respErr = errors.New(string(resp.Error))
 			}
-			// nilErr := reflect.Zero(reflect.TypeOf(new(error)).Elem())
-			return []reflect.Value{reflect.ValueOf(out), reflect.Zero(reflect.TypeOf(new(error)).Elem())}
+			if len(resp.Data) > 0 {
+				out = reflect.New(fieldTyp.Type.Out(0).Elem())
+				err = serializer.Decode(resp.Data, out.Interface())
+				if err != nil {
+					return []reflect.Value{out, reflect.ValueOf(err)}
+				}
+			}
+			var errVal reflect.Value
+			if respErr == nil {
+				errVal = reflect.Zero(reflect.TypeOf(new(error)).Elem())
+			} else {
+				errVal = reflect.ValueOf(respErr)
+			}
+			return []reflect.Value{out, errVal}
 		}
 		fieldVal.Set(reflect.MakeFunc(fieldTyp.Type, fn))
 	}
 	return nil
-
 }
 
 // Invoke -> invoke rpc service
@@ -131,7 +164,7 @@ func (c *Client) Invoke(ctx context.Context, req *message.Request) (*message.Res
 		return nil, err
 	}
 	if l != len(encode) {
-		return nil, errors.New("micro: 未写入全部数据")
+		return nil, errors.New("client: not all data is written")
 	}
 	data, err := ReadMsg(conn)
 	if err != nil {

@@ -4,7 +4,8 @@ import (
 	"context"
 	"emicro/internal/errs"
 	"emicro/message"
-	"encoding/json"
+	"emicro/serialize"
+	"emicro/serialize/json"
 	"fmt"
 	"io"
 	"net"
@@ -13,25 +14,37 @@ import (
 
 // Server -> tcp conn Server
 type Server struct {
-	services map[string]*reflectionStub
+	services    map[string]*reflectionStub
+	serializers []serialize.Serializer
 }
 
 // NewServer instance
 func NewServer() *Server {
-	return &Server{
+	res := &Server{
 		services: make(map[string]*reflectionStub, 8),
+		// 一个字节，最多有 256 个实现，直接做成一个简单的 bit array 的东西
+		serializers: make([]serialize.Serializer, 256),
 	}
+	// 注册最基本的序列化协议
+	res.RegisterSerializer(json.Serializer{})
+	return res
 }
 
 // RegisterService -> Service stub
 func (s *Server) RegisterService(service Service) {
 	s.services[service.ServiceName()] = &reflectionStub{
-		s:     service,
-		value: reflect.ValueOf(service),
+		s:           service,
+		serializers: s.serializers,
+		value:       reflect.ValueOf(service),
 	}
 }
 
-// Start ->
+// RegisterSerializer -> register serializer
+func (s *Server) RegisterSerializer(serializer serialize.Serializer) {
+	s.serializers[serializer.Code()] = serializer
+}
+
+// Start -> run server
 func (s *Server) Start(address string) error {
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
@@ -53,7 +66,7 @@ func (s *Server) Start(address string) error {
 	}
 }
 
-// handleConn ->
+// handleConn -> handle tcp connection
 func (s *Server) handleConn(conn net.Conn) error {
 	for {
 		bs, err := ReadMsg(conn)
@@ -107,40 +120,56 @@ func (s *Server) handleConn(conn net.Conn) error {
 func (s *Server) Invoke(ctx context.Context, req *message.Request) *message.Response {
 	stub, ok := s.services[req.ServiceName]
 	if !ok {
-		return &message.Response{Error: []byte(errs.InvalidServiceName.Error())}
+		return &message.Response{
+			Version:    req.Version,
+			Compresser: req.Compresser,
+			Serializer: req.Serializer,
+			MessageId:  req.MessageId,
+			Error:      []byte(errs.InvalidServiceName.Error())}
 	}
+	return stub.Invoke(ctx, req)
+}
 
-	data, err := stub.Invoke(ctx, req.Method, req.Data)
-	if err != nil {
-		return &message.Response{Error: []byte(err.Error())}
-	}
+// reflectionStub -> service stub
+type reflectionStub struct {
+	s           Service
+	value       reflect.Value
+	serializers []serialize.Serializer
+}
+
+// Invoke -> stub execute method by reflect
+func (s *reflectionStub) Invoke(ctx context.Context, req *message.Request) *message.Response {
+	method := s.value.MethodByName(req.Method)
+	in := reflect.New(method.Type().In(1).Elem())
+	//err := json.Unmarshal(reqData, in.Interface())
 	response := &message.Response{
 		Version:    req.Version,
 		Compresser: req.Compresser,
 		Serializer: req.Serializer,
 		MessageId:  req.MessageId,
-		Data:       data,
 	}
-	return response
-}
-
-// reflectionStub -> service stub
-type reflectionStub struct {
-	s     Service
-	value reflect.Value
-}
-
-// Invoke -> stub execute method by reflect
-func (s *reflectionStub) Invoke(ctx context.Context, methodName string, reqData []byte) ([]byte, error) {
-	method := s.value.MethodByName(methodName)
-	in := reflect.New(method.Type().In(1).Elem())
-	err := json.Unmarshal(reqData, in.Interface())
+	serializer := s.serializers[req.Serializer]
+	err := serializer.Decode(req.Data, in.Interface())
 	if err != nil {
-		return nil, err
+		response.Error = []byte(err.Error())
+		return response
 	}
-	res := method.Call([]reflect.Value{reflect.ValueOf(ctx), in})
+	res := method.Call(
+		[]reflect.Value{reflect.ValueOf(ctx), in})
+	//if !res[1].IsZero() {
+	//	response.Error = []byte(res[1].Interface().(error).Error())
+	//	return response
+	//}
 	if len(res) > 1 && res[1].Interface() != nil {
-		return nil, res[1].Interface().(error)
+		response.Error = []byte(
+			res[1].Interface().(error).Error())
+		return response
 	}
-	return json.Marshal(res[0].Interface())
+	data, err := serializer.Encode(res[0].Interface())
+	if err != nil {
+		response.Error = []byte(err.Error())
+		return response
+	}
+	response.Data = data
+	return response
 }

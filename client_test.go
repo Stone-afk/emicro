@@ -3,12 +3,14 @@ package emicro
 import (
 	"context"
 	"emicro/message"
+	"emicro/serialize/json"
 	"errors"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func Test_setFuncField(t *testing.T) {
+	serializer := json.Serializer{}
 	testCases := []struct {
 		name        string
 		service     *mockService
@@ -49,8 +51,12 @@ func Test_setFuncField(t *testing.T) {
 			proxy: &mockProxy{
 				t: t,
 				req: &message.Request{
+					HeadLength:  36,
+					BodyLength:  16,
+					MessageId:   2,
 					ServiceName: "user-service",
 					Method:      "GetById",
+					Serializer:  serializer.Code(),
 					Data:        []byte(`{"msg":"123456"}`),
 				},
 				resp: &message.Response{
@@ -64,7 +70,7 @@ func Test_setFuncField(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := setFuncField(tc.service.s, tc.proxy)
+			err := setFuncField(serializer, tc.service.s, tc.proxy)
 			assert.Equal(t, tc.wantInitErr, err)
 			if err != nil {
 				return

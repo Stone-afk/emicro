@@ -3,8 +3,10 @@ module emicro
 go 1.18
 
 require (
+	github.com/gotomicro/ekit v0.0.4
 	github.com/silenceper/pool v1.0.0
 	github.com/stretchr/testify v1.8.1
+	google.golang.org/protobuf v1.28.1
 )
 
 require (

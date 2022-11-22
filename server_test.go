@@ -69,6 +69,8 @@ func newRequestBytes(t *testing.T, service string, method string, input any) []b
 		ServiceName: service,
 		Method:      method,
 		Data:        data,
+		// 固定用 json
+		Serializer: 1,
 	}
 	req.SetHeadLength()
 	req.SetBodyLength()
