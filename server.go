@@ -10,12 +10,23 @@ import (
 	"io"
 	"net"
 	"reflect"
+	"strconv"
+	"time"
 )
 
 // Server -> tcp conn Server
 type Server struct {
+	listener    net.Listener
 	services    map[string]*reflectionStub
 	serializers []serialize.Serializer
+}
+
+// Close -> close net.Listener
+func (s *Server) Close() error {
+	if s.listener != nil {
+		return s.listener.Close()
+	}
+	return nil
 }
 
 // MustRegister -> panic error
@@ -59,31 +70,53 @@ func (s *Server) Start(address string) error {
 	if err != nil {
 		return err
 	}
+	s.listener = listener
 	for {
 		conn, err := listener.Accept()
-		if err != nil {
-			// 可以考虑打印日志
-			fmt.Printf("server: accept connection got error: %v", err)
-		}
-		go func() {
-			if er := s.handleConn(conn); er != nil {
-				// 可以考虑打印日志
-				_ = conn.Close()
-				return
-			}
-		}()
-	}
-}
-
-// handleConn -> handle tcp connection
-func (s *Server) handleConn(conn net.Conn) error {
-	for {
-		bs, err := ReadMsg(conn)
-		if err == io.EOF {
+		if err == net.ErrClosed {
+			// 关闭了
 			return nil
 		}
 		if err != nil {
-			return err
+			// 可以考虑打印日志
+			fmt.Printf("server: accept connection got error: %v", err)
+			continue
+		}
+		go s.handleConn(conn)
+	}
+}
+
+//// Start -> run server
+//func (s *Server) Start(address string) error {
+//	listener, err := net.Listen("tcp", address)
+//	if err != nil {
+//		return err
+//	}
+//	for {
+//		conn, err := listener.Accept()
+//		if err != nil {
+//			// 可以考虑打印日志
+//			fmt.Printf("server: accept connection got error: %v", err)
+//		}
+//		go func() {
+//			if er := s.handleConn(conn); er != nil {
+//				// 可以考虑打印日志
+//				_ = conn.Close()
+//				return
+//			}
+//		}()
+//	}
+//}
+
+// handleConn -> handle tcp connection
+func (s *Server) handleConn(conn net.Conn) {
+	for {
+		bs, err := ReadMsg(conn)
+		if err == io.EOF {
+			continue
+		}
+		if err != nil {
+			return
 		}
 		// go func() {}
 		// req := &message.Request{}
@@ -91,9 +124,22 @@ func (s *Server) handleConn(conn net.Conn) error {
 		//if err != nil {
 		//	return fmt.Errorf("server: unable to deserialize request, %w", err)
 		//}
-
 		req := message.DecodeReq(bs)
+		ctx := context.Background()
+		deadline, err := strconv.ParseInt(req.Meta["deadline"], 10, 64)
+		cancel := func() {}
+		if err == nil {
+			ctx, cancel = context.WithDeadline(ctx, time.UnixMilli(deadline))
+		}
+
 		resp := s.Invoke(context.Background(), req)
+
+		if req.Meta["one-way"] == "true" {
+			// 什么也不需要处理。
+			// 这样就相当于直接把连接资源释放了，去接收下一个请求了
+			cancel()
+			continue
+		}
 
 		//respBs, err := json.Marshal(resp)
 		//if err != nil {
@@ -112,8 +158,9 @@ func (s *Server) handleConn(conn net.Conn) error {
 		encode := message.EncodeResp(resp)
 		_, er := conn.Write(encode)
 		if er != nil {
-			return fmt.Errorf("server: sending response failed: %v", er)
+			fmt.Printf("server: sending response failed: %v", er)
 		}
+		cancel()
 	}
 }
 

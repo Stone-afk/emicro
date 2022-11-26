@@ -12,6 +12,7 @@ import (
 	"github.com/silenceper/pool"
 	"net"
 	"reflect"
+	"strconv"
 	"sync/atomic"
 	"time"
 )
@@ -99,10 +100,20 @@ func setFuncField(serializer serialize.Serializer, service Service, proxy Proxy)
 			// out := reflect.New(fieldTyp.Type.Out(0).Elem()).Interface()
 			out := reflect.Zero(fieldTyp.Type.Out(0))
 			reqData, err := serializer.Encode(in)
+			// 暂时先写死，后面我们考虑通用的链路元数据传递再重构
+			var meta map[string]string
+			if isOneway(ctx) {
+				meta = map[string]string{"one-way": "true"}
+			}
+			if deadline, ok := ctx.Deadline(); ok {
+				// 传输字符串，需要更加多的空间
+				meta["deadline"] = strconv.FormatInt(deadline.UnixMilli(), 10)
+			}
 			if err != nil {
 				return []reflect.Value{out, reflect.ValueOf(err)}
 			}
 			req := &message.Request{
+				Meta:        meta,
 				MessageId:   atomic.AddUint32(&messageId, +1),
 				Compresser:  0,
 				Serializer:  serializer.Code(),
@@ -144,6 +155,30 @@ func setFuncField(serializer serialize.Serializer, service Service, proxy Proxy)
 
 // Invoke -> invoke rpc service
 func (c *Client) Invoke(ctx context.Context, req *message.Request) (*message.Response, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	var (
+		resp *message.Response
+		err  error
+	)
+	ch := make(chan struct{})
+	go func() {
+		encode := message.EncodeReq(req)
+		resp, err = c.doInvoke(ctx, encode)
+		ch <- struct{}{}
+		close(ch)
+	}()
+	select {
+	case <-ch:
+		return resp, err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// doInvoke -> invoke rpc service
+func (c *Client) doInvoke(ctx context.Context, encode []byte) (*message.Response, error) {
 	val, err := c.connPool.Get()
 	if err != nil {
 		return nil, fmt.Errorf("client: unable to get an available connection %w", err)
@@ -153,18 +188,21 @@ func (c *Client) Invoke(ctx context.Context, req *message.Request) (*message.Res
 		_ = c.connPool.Put(val)
 	}()
 	conn := val.(net.Conn)
-	//reqBs, err := json.Marshal(req)
-	//if err != nil {
+	// reqBs, err := json.Marshal(req)
+	// if err != nil {
 	//	return nil, fmt.Errorf("client: unable to serialize request, %w", err)
-	//}
-	//encode := EncodeMsg(reqBs)
-	encode := message.EncodeReq(req)
+	// }
+	// encode := EncodeMsg(reqBs)
+	// encode := message.EncodeReq(req)
 	l, err := conn.Write(encode)
 	if err != nil {
 		return nil, err
 	}
 	if l != len(encode) {
 		return nil, errors.New("client: not all data is written")
+	}
+	if isOneway(ctx) {
+		return nil, errs.OnewayError
 	}
 	data, err := ReadMsg(conn)
 	if err != nil {
