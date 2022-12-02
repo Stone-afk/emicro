@@ -11,6 +11,7 @@ var (
 	ReadRespFailError   = errors.New("emicro: unable to read response")
 	InvalidServiceName  = errors.New("emicro: Invalid service name")
 	ClientNotAllWritten = errors.New("emicro: client not all data is written")
+	OnewayError         = errors.New("emicro: 这是 oneway 调用")
 )
 
 var (
