@@ -85,25 +85,9 @@ func (s *Server) handleConn(conn net.Conn) error {
 		if err != nil {
 			return err
 		}
-		// go func() {}
-		// req := &message.Request{}
-		//err = json.Unmarshal(bs, req)
-		//if err != nil {
-		//	return fmt.Errorf("server: unable to deserialize request, %w", err)
-		//}
 
 		req := message.DecodeReq(bs)
 		resp := s.Invoke(context.Background(), req)
-
-		//respBs, err := json.Marshal(resp)
-		//if err != nil {
-		//	return fmt.Errorf("server: unable to serialize response, %w", err)
-		//}
-		//encode := EncodeMsg(respBs)
-		//encode, err := s.encodeMsg(resp)
-		//if err != nil {
-		//	return err
-		//}
 
 		// calculate and set the response head length
 		resp.SetHeadLength()
@@ -112,18 +96,10 @@ func (s *Server) handleConn(conn net.Conn) error {
 		encode := message.EncodeResp(resp)
 		_, er := conn.Write(encode)
 		if er != nil {
-			return fmt.Errorf("server: sending response failed: %v", er)
+			return errs.ServerResponseFailed(er)
 		}
 	}
 }
-
-//func (s *Server) encodeMsg(msg any) ([]byte, error) {
-//	bs, err := json.Marshal(msg)
-//	if err != nil {
-//		return nil, fmt.Errorf("server: unable to serialize response, %w", err)
-//	}
-//	return EncodeMsg(bs), nil
-//}
 
 // Invoke -> server Invoke
 func (s *Server) Invoke(ctx context.Context, req *message.Request) *message.Response {
@@ -165,10 +141,7 @@ func (s *reflectionStub) Invoke(ctx context.Context, req *message.Request) *mess
 	}
 	res := method.Call(
 		[]reflect.Value{reflect.ValueOf(ctx), in})
-	//if !res[1].IsZero() {
-	//	response.Error = []byte(res[1].Interface().(error).Error())
-	//	return response
-	//}
+
 	if len(res) > 1 && res[1].Interface() != nil {
 		response.Error = []byte(
 			res[1].Interface().(error).Error())

@@ -7,7 +7,6 @@ import (
 	"emicro/serialize"
 	"emicro/serialize/json"
 	"errors"
-	"fmt"
 	"github.com/gotomicro/ekit/bean/option"
 	"github.com/silenceper/pool"
 	"net"
@@ -146,34 +145,25 @@ func setFuncField(serializer serialize.Serializer, service Service, proxy Proxy)
 func (c *Client) Invoke(ctx context.Context, req *message.Request) (*message.Response, error) {
 	val, err := c.connPool.Get()
 	if err != nil {
-		return nil, fmt.Errorf("client: unable to get an available connection %w", err)
+		return nil, errs.ClientConnDeaded(err)
 	}
 	// put back
 	defer func() {
 		_ = c.connPool.Put(val)
 	}()
 	conn := val.(net.Conn)
-	//reqBs, err := json.Marshal(req)
-	//if err != nil {
-	//	return nil, fmt.Errorf("client: unable to serialize request, %w", err)
-	//}
-	//encode := EncodeMsg(reqBs)
 	encode := message.EncodeReq(req)
 	l, err := conn.Write(encode)
 	if err != nil {
 		return nil, err
 	}
 	if l != len(encode) {
-		return nil, errors.New("client: not all data is written")
+		return nil, errs.ClientNotAllWritten
 	}
 	data, err := ReadMsg(conn)
 	if err != nil {
 		return nil, errs.ReadRespFailError
 	}
-	// resp := &message.Response{}
-	//err = json.Unmarshal(data, resp)
-	//if err != nil {
-	//	return nil, fmt.Errorf("client: unable to deserialize response, %w", err)
-	//}
+
 	return message.DecodeResp(data), nil
 }

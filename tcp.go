@@ -37,11 +37,3 @@ func ReadMsg(conn net.Conn) (bs []byte, err error) {
 	copy(bs[:lenBytes], lenBs)
 	return bs, err
 }
-
-//func EncodeMsg(msg []byte) []byte {
-//	encode := make([]byte, lenBytes+len(msg))
-//	//  int -> unint64 -> bytes
-//	binary.BigEndian.PutUint64(encode[:lenBytes], uint64(len(msg)))
-//	copy(encode[lenBytes:], msg)
-//	return encode
-//}
