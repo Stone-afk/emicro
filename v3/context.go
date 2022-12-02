@@ -1,3 +1,5 @@
+//go:build v3
+
 package emicro
 
 import "context"

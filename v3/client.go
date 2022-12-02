@@ -1,11 +1,13 @@
+//go:build v3
+
 package emicro
 
 import (
 	"context"
-	"emicro/internal/errs"
-	"emicro/message"
-	"emicro/serialize"
-	"emicro/serialize/json"
+	"emicro/v3/internal/errs"
+	"emicro/v3/message"
+	"emicro/v3/serialize"
+	"emicro/v3/serialize/json"
 	"errors"
 	"github.com/gotomicro/ekit/bean/option"
 	"github.com/silenceper/pool"

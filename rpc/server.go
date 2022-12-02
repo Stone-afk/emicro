@@ -1,11 +1,11 @@
-package emicro
+package rpc
 
 import (
 	"context"
 	"emicro/internal/errs"
-	"emicro/message"
-	"emicro/serialize"
-	"emicro/serialize/json"
+	"emicro/rpc/message"
+	"emicro/rpc/serialize"
+	"emicro/rpc/serialize/json"
 	"fmt"
 	"io"
 	"net"
@@ -51,10 +51,17 @@ func NewServer() *Server {
 
 // RegisterService -> Service stub
 func (s *Server) RegisterService(service Service) error {
+	val := reflect.ValueOf(service)
+	typ := reflect.TypeOf(service)
+	methods := make(map[string]reflect.Value, val.NumMethod())
+	for i := 0; i < val.NumMethod(); i++ {
+		methodTyp := typ.Method(i)
+		methods[methodTyp.Name] = val.Method(i)
+	}
 	s.services[service.ServiceName()] = &reflectionStub{
 		s:           service,
+		methods:     methods,
 		serializers: s.serializers,
-		value:       reflect.ValueOf(service),
 	}
 	return nil
 }
@@ -119,7 +126,6 @@ func (s *Server) handleConn(conn net.Conn) {
 		if err != nil {
 			return
 		}
-
 		req := message.DecodeReq(bs)
 		ctx := context.Background()
 		deadline, err := strconv.ParseInt(req.Meta["deadline"], 10, 64)
@@ -127,16 +133,13 @@ func (s *Server) handleConn(conn net.Conn) {
 		if err == nil {
 			ctx, cancel = context.WithDeadline(ctx, time.UnixMilli(deadline))
 		}
-
 		resp := s.Invoke(ctx, req)
-
 		if req.Meta["one-way"] == "true" {
 			// 什么也不需要处理。
 			// 这样就相当于直接把连接资源释放了，去接收下一个请求了
 			cancel()
 			continue
 		}
-
 		// calculate and set the response head length
 		resp.SetHeadLength()
 		// calculate and set the response body length
@@ -167,21 +170,26 @@ func (s *Server) Invoke(ctx context.Context, req *message.Request) *message.Resp
 // reflectionStub -> service stub
 type reflectionStub struct {
 	s           Service
-	value       reflect.Value
 	serializers []serialize.Serializer
+	methods     map[string]reflect.Value
 }
 
 // Invoke -> stub execute method by reflect
 func (s *reflectionStub) Invoke(ctx context.Context, req *message.Request) *message.Response {
-	method := s.value.MethodByName(req.Method)
-	in := reflect.New(method.Type().In(1).Elem())
-	//err := json.Unmarshal(reqData, in.Interface())
 	response := &message.Response{
 		Version:    req.Version,
 		Compresser: req.Compresser,
 		Serializer: req.Serializer,
 		MessageId:  req.MessageId,
 	}
+	method, ok := s.methods[req.Method]
+	if !ok {
+		response.Error = []byte(
+			errs.NotFoundServiceMethod(req.Method).Error())
+		return response
+	}
+	in := reflect.New(method.Type().In(1).Elem())
+	//err := json.Unmarshal(reqData, in.Interface())
 	serializer := s.serializers[req.Serializer]
 	err := serializer.Decode(req.Data, in.Interface())
 	if err != nil {

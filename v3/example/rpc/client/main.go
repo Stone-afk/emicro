@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"emicro/example/rpc/proto/gen"
-	rpc "emicro/rpc"
+	rpc "emicro"
+	"emicro/v3example/rpc/proto/gen"
 	"encoding/json"
 	"fmt"
 )

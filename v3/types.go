@@ -1,8 +1,9 @@
+//go:build v3
+
 package emicro
 
 import (
 	"context"
-	"emicro/message"
 )
 
 type Proxy interface {

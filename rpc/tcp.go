@@ -1,4 +1,4 @@
-package emicro
+package rpc
 
 import (
 	"emicro/internal/errs"

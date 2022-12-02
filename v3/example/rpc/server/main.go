@@ -1,10 +1,10 @@
 package main
 
 import (
-	rpc "emicro/rpc"
+	rpc "emicro"
 
-	"emicro/rpc/serialize/json"
-	"emicro/rpc/serialize/proto"
+	"emicro/v3serialize/json"
+	"emicro/v3serialize/proto"
 )
 
 func main() {

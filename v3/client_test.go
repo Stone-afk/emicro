@@ -1,9 +1,10 @@
+//go:build v3
+
 package emicro
 
 import (
 	"context"
-	"emicro/message"
-	"emicro/serialize/json"
+	"emicro/v3/serialize/json"
 	"errors"
 	"github.com/stretchr/testify/assert"
 	"testing"
