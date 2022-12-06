@@ -4,6 +4,7 @@ import (
 	"context"
 	"emicro/registry"
 	"google.golang.org/grpc/resolver"
+	"log"
 	"time"
 )
 
@@ -54,6 +55,7 @@ type grpcResolver struct {
 	registry registry.Registry
 	timeout  time.Duration
 	close    chan struct{}
+	// builder *resolver.Builder
 }
 
 // ResolveNow 立刻解析——立刻执行服务发现——立刻去问一下注册中心
@@ -64,6 +66,8 @@ func (r *grpcResolver) ResolveNow(options resolver.ResolveNowOptions) {
 
 func (r *grpcResolver) resolve() {
 	serviceName := r.target.Endpoint
+	// 这个就是可用服务实例（节点）列表
+	// 你要考虑设置超时
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	instances, err := r.registry.ListServices(ctx, serviceName)
 	cancel()
@@ -92,13 +96,30 @@ func (r *grpcResolver) watch() {
 	for {
 		select {
 		case <-events:
-			// 一种做法就是我们这边区别处理不同事件类型，然后更新数据
-			// switch event.Type {
-			//
-			//			}
-			// 另外一种做法就是我们这里采用的，每次事件发生的时候，就直接刷新整个可用服务列表
+			// 做法一：立刻更新可用节点列表
+			// 这种是幂等的
+
+			// 在这里引入重试的机制
 			r.resolve()
+			// 做法二：精细化做法，非常依赖于事件顺序
+			// 你这里收到的事件的顺序，要和在注册中心上发生的顺序一样
+			// 少访问一次注册中心
+			// switch event.Type {
+			// case registry.EventTypeAdd:
+			// 	state.Addresses = append(state.Addresses, resolver.Address{
+			// 	Addr: event.Instance.Address,
+			// 	})
+			// 	cc.UpdateState(state)
+			// 	// cc.AddAddress
+			// case registry.EventTypeDelete:
+			// 	event.Instance // 这是被删除的节点
+			// case registry.EventTypeUpdate:
+			// 	event.Instance // 这是被更新的，而且是更新后的节点
+			//
+			// }
+			log.Println(events)
 		case <-r.close:
+			close(r.close)
 			return
 		}
 	}
