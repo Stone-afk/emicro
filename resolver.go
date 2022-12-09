@@ -29,8 +29,8 @@ func (r *grpcResolverBuilder) Build(target resolver.Target, cc resolver.ClientCo
 		timeout:  r.timeout,
 	}
 	res.resolve()
-	go res.watch()
-	return res, nil
+	err := res.watch()
+	return res, err
 }
 
 // 伪代码
@@ -91,38 +91,45 @@ func (r *grpcResolver) resolve() {
 	}
 }
 
-func (r *grpcResolver) watch() {
-	events := r.registry.Subscribe(r.target.Endpoint)
-	for {
-		select {
-		case <-events:
-			// 做法一：立刻更新可用节点列表
-			// 这种是幂等的
-
-			// 在这里引入重试的机制
-			r.resolve()
-			// 做法二：精细化做法，非常依赖于事件顺序
-			// 你这里收到的事件的顺序，要和在注册中心上发生的顺序一样
-			// 少访问一次注册中心
-			// switch event.Type {
-			// case registry.EventTypeAdd:
-			// 	state.Addresses = append(state.Addresses, resolver.Address{
-			// 	Addr: event.Instance.Address,
-			// 	})
-			// 	cc.UpdateState(state)
-			// 	// cc.AddAddress
-			// case registry.EventTypeDelete:
-			// 	event.Instance // 这是被删除的节点
-			// case registry.EventTypeUpdate:
-			// 	event.Instance // 这是被更新的，而且是更新后的节点
-			//
-			// }
-			log.Println(events)
-		case <-r.close:
-			close(r.close)
-			return
-		}
+func (r *grpcResolver) watch() error {
+	events, err := r.registry.Subscribe(r.target.Endpoint)
+	if err != nil {
+		return err
 	}
+	go func() {
+		for {
+			select {
+			case event := <-events:
+				// 做法一：立刻更新可用节点列表
+				// 这种是幂等的
+
+				// 在这里引入重试的机制
+				r.resolve()
+				// 做法二：精细化做法，非常依赖于事件顺序
+				// 你这里收到的事件的顺序，要和在注册中心上发生的顺序一样
+				// 少访问一次注册中心
+				// switch event.Type {
+				// case registry.EventTypeAdd:
+				// 	state.Addresses = append(state.Addresses, resolver.Address{
+				// 	Addr: event.Instance.Address,
+				// 	})
+				// 	cc.UpdateState(state)
+				// 	// cc.AddAddress
+				// case registry.EventTypeDelete:
+				// 	event.Instance // 这是被删除的节点
+				// case registry.EventTypeUpdate:
+				// 	event.Instance // 这是被更新的，而且是更新后的节点
+				//
+				// }
+				log.Println(event)
+			case <-r.close:
+				close(r.close)
+				return
+			}
+		}
+	}()
+
+	return nil
 }
 
 // Close closes the resolver.

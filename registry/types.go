@@ -5,11 +5,12 @@ import (
 	"io"
 )
 
+//go:generate mockgen -package=mocks -destination=mocks/registry.mock.go -source=types.go Registry
 type Registry interface {
 	Register(ctx context.Context, inst ServiceInstance) error
-	UnRegister(ctx context.Context, inst ServiceInstance) error
+	Unregister(ctx context.Context, ins ServiceInstance) error
 	ListServices(ctx context.Context, serviceName string) ([]ServiceInstance, error)
-	Subscribe(serviceName string) <-chan Event
+	Subscribe(serviceName string) (<-chan Event, error)
 	io.Closer
 }
 

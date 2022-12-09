@@ -77,7 +77,7 @@ func (r *Registry) ListServices(ctx context.Context, serviceName string) ([]regi
 	return res, nil
 }
 
-func (r *Registry) Subscribe(serviceName string) <-chan registry.Event {
+func (r *Registry) Subscribe(serviceName string) (<-chan registry.Event, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	ctx = clientv3.WithRequireLeader(ctx)
 	r.mutex.Lock()
@@ -125,7 +125,7 @@ func (r *Registry) Subscribe(serviceName string) <-chan registry.Event {
 			}
 		}
 	}()
-	return res
+	return res, nil
 }
 
 func (r *Registry) Close() error {
