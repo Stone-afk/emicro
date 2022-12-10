@@ -55,7 +55,7 @@ func (r *Registry) Register(ctx context.Context, ins registry.ServiceInstance) e
 	return err
 }
 
-func (r *Registry) UnRegister(ctx context.Context, ins registry.ServiceInstance) error {
+func (r *Registry) Unregister(ctx context.Context, ins registry.ServiceInstance) error {
 	_, err := r.client.Delete(ctx, r.instanceKey(ins))
 	return err
 }
@@ -90,6 +90,7 @@ func (r *Registry) Subscribe(serviceName string) (<-chan registry.Event, error) 
 			select {
 			case resp := <-watchCh:
 				if resp.Canceled {
+					close(res)
 					return
 				}
 				if resp.Err() != nil {
@@ -106,6 +107,7 @@ func (r *Registry) Subscribe(serviceName string) (<-chan registry.Event, error) 
 						case res <- registry.Event{}:
 						// case <- r.close:
 						case <-ctx.Done():
+							close(res)
 							return
 						}
 						continue
@@ -117,10 +119,12 @@ func (r *Registry) Subscribe(serviceName string) (<-chan registry.Event, error) 
 					}:
 					// case <- r.close:
 					case <-ctx.Done():
+						close(res)
 						return
 					}
 				}
 			case <-ctx.Done():
+				close(res)
 				return
 			}
 		}

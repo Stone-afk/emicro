@@ -16,6 +16,7 @@ type Server struct {
 	listener net.Listener
 	// 单个操作的超时时间，一般用于和注册中心打交道
 	timeout time.Duration
+	si      registry.ServiceInstance
 	name    string
 	weight  uint32
 	group   string
@@ -68,14 +69,14 @@ func (s *Server) Start(addr string) error {
 	if s.registry != nil {
 		// defer s.r.Unregister()
 		ctx, cacel := context.WithTimeout(context.Background(), s.timeout)
-		si := registry.ServiceInstance{
+		s.si = registry.ServiceInstance{
 			Name:    s.name,
 			Group:   s.group,
 			Weight:  s.weight,
 			Address: listener.Addr().String(),
 		}
 		// 要确保端口启动之后才能注册
-		err = s.registry.Register(ctx, si)
+		err = s.registry.Register(ctx, s.si)
 		cacel()
 		if err != nil {
 			return err
@@ -89,8 +90,14 @@ func (s *Server) Start(addr string) error {
 
 func (s *Server) Close() error {
 	// 可以在这里 Unregister
-	// s.r.Unregister()
+	// s.registry.Unregister()
 	// 这里可以插入你的优雅退出逻辑
 	// s.listener.Close()
-	return nil
+
+	err := s.registry.Unregister(context.Background(), s.si)
+	if err != nil {
+		return err
+	}
+	// 这里可以插入你的优雅退出逻辑
+	return s.listener.Close()
 }

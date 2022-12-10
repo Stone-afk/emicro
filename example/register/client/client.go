@@ -37,10 +37,10 @@ func main() {
 	resp, err := userClient.GetById(ctx, &gen.GetByIdReq{
 		Id: 12,
 	})
+	cancel()
 	if err != nil {
 		panic(err)
 	}
-	cancel()
 	bs, err := json.Marshal(resp.User)
 	if err != nil {
 		panic(err)
