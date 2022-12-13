@@ -3,6 +3,7 @@ package rpc
 import (
 	"context"
 	"emicro/internal/errs"
+	"emicro/rpc/compress"
 	"emicro/rpc/message"
 	"emicro/rpc/serialize"
 	"emicro/rpc/serialize/json"
@@ -23,12 +24,20 @@ var messageId uint32 = 0
 type Client struct {
 	connPool   pool.Pool
 	serializer serialize.Serializer
+	compressor compress.Compressor
 }
 
 // ClientWithSerializer -> option
 func ClientWithSerializer(s serialize.Serializer) option.Option[Client] {
 	return func(client *Client) {
 		client.serializer = s
+	}
+}
+
+// ClientWithCompressor -> option
+func ClientWithCompressor(c compress.Compressor) option.Option[Client] {
+	return func(client *Client) {
+		client.compressor = c
 	}
 }
 
@@ -53,6 +62,8 @@ func NewClient(address string, opts ...option.Option[Client]) (*Client, error) {
 	client := &Client{
 		connPool:   connPool,
 		serializer: json.Serializer{},
+		// 避免 nil 检测
+		compressor: compress.DoNothingCompressor{},
 	}
 	for _, opt := range opts {
 		opt(client)
@@ -67,19 +78,20 @@ func InitClientProxy(address string, srv Service) error {
 	if err != nil {
 		return err
 	}
-	if err = setFuncField(client.serializer, srv, client); err != nil {
+	if err = setFuncField(client.serializer, client.compressor, srv, client); err != nil {
 		return err
 	}
 	return nil
 }
 
-// InitClientProxy -> init client proxy
-func (c *Client) InitClientProxy(srv Service) error {
-	return setFuncField(c.serializer, srv, c)
+// InitService -> init client proxy
+func (c *Client) InitService(srv Service) error {
+	return setFuncField(c.serializer, c.compressor, srv, c)
 }
 
 // setFuncField
-func setFuncField(serializer serialize.Serializer, service Service, proxy Proxy) error {
+func setFuncField(serializer serialize.Serializer,
+	compress compress.Compressor, service Service, proxy Proxy) error {
 	srvValElem := reflect.ValueOf(service).Elem()
 	srvTypElem := srvValElem.Type()
 	if srvTypElem.Kind() == reflect.Ptr {
@@ -94,27 +106,36 @@ func setFuncField(serializer serialize.Serializer, service Service, proxy Proxy)
 			continue
 		}
 		fn := func(args []reflect.Value) (results []reflect.Value) {
-			ctx := args[0].Interface().(context.Context)
 			in := args[1].Interface()
 			// out := reflect.New(fieldTyp.Type.Out(0).Elem()).Interface()
 			out := reflect.Zero(fieldTyp.Type.Out(0))
+			// serialize request data
 			reqData, err := serializer.Encode(in)
-			// 暂时先写死，后面我们考虑通用的链路元数据传递再重构
+			if err != nil {
+				return []reflect.Value{out, reflect.ValueOf(err)}
+			}
+			// compress response data
+			reqData, err = compress.Compress(reqData)
+			if err != nil {
+				return []reflect.Value{out, reflect.ValueOf(err)}
+			}
+
+			ctx := args[0].Interface().(context.Context)
+			// For the time being, write it dead first.
+			//Later, we will consider the general link metadata transmission and reconstruction
 			var meta map[string]string
 			if isOneway(ctx) {
 				meta = map[string]string{"one-way": "true"}
 			}
 			if deadline, ok := ctx.Deadline(); ok {
-				// 传输字符串，需要更加多的空间
+				// More space is required for string transmission
 				meta["deadline"] = strconv.FormatInt(deadline.UnixMilli(), 10)
 			}
-			if err != nil {
-				return []reflect.Value{out, reflect.ValueOf(err)}
-			}
+
 			req := &message.Request{
 				Meta:        meta,
 				MessageId:   atomic.AddUint32(&messageId, +1),
-				Compresser:  0,
+				Compresser:  compress.Code(),
 				Serializer:  serializer.Code(),
 				ServiceName: service.ServiceName(),
 				Method:      fieldTyp.Name,
@@ -134,7 +155,14 @@ func setFuncField(serializer serialize.Serializer, service Service, proxy Proxy)
 			}
 			if len(resp.Data) > 0 {
 				out = reflect.New(fieldTyp.Type.Out(0).Elem())
-				err = serializer.Decode(resp.Data, out.Interface())
+				var data []byte
+				// decompress response data
+				data, err = compress.Uncompress(resp.Data)
+				if err != nil {
+					return []reflect.Value{out, reflect.ValueOf(err)}
+				}
+				// deserialize response data
+				err = serializer.Decode(data, out.Interface())
 				if err != nil {
 					return []reflect.Value{out, reflect.ValueOf(err)}
 				}

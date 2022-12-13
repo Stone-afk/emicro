@@ -3,6 +3,7 @@ package rpc
 import (
 	"context"
 	"emicro/internal/errs"
+	"emicro/rpc/compress"
 	"emicro/rpc/message"
 	"emicro/rpc/serialize"
 	"emicro/rpc/serialize/json"
@@ -19,6 +20,7 @@ type Server struct {
 	listener    net.Listener
 	services    map[string]*reflectionStub
 	serializers []serialize.Serializer
+	compressors []compress.Compressor
 }
 
 // Close -> close net.Listener
@@ -41,11 +43,15 @@ func (s *Server) MustRegister(service Service) {
 func NewServer() *Server {
 	res := &Server{
 		services: make(map[string]*reflectionStub, 8),
+		// A byte can have up to 256 implementations, which can be directly made into a simple bit array
 		// 一个字节，最多有 256 个实现，直接做成一个简单的 bit array 的东西
 		serializers: make([]serialize.Serializer, 256),
+
+		compressors: make([]compress.Compressor, 256),
 	}
-	// 注册最基本的序列化协议
+	// Register the most basic serialization protocol
 	res.RegisterSerializer(json.Serializer{})
+	res.RegisterCompressor(compress.DoNothingCompressor{})
 	return res
 }
 
@@ -62,6 +68,7 @@ func (s *Server) RegisterService(service Service) error {
 		s:           service,
 		methods:     methods,
 		serializers: s.serializers,
+		compressors: s.compressors,
 	}
 	return nil
 }
@@ -69,6 +76,11 @@ func (s *Server) RegisterService(service Service) error {
 // RegisterSerializer -> register serializer
 func (s *Server) RegisterSerializer(serializer serialize.Serializer) {
 	s.serializers[serializer.Code()] = serializer
+}
+
+// RegisterCompressor -> register compressor
+func (s *Server) RegisterCompressor(compressor compress.Compressor) {
+	s.compressors[compressor.Code()] = compressor
 }
 
 // Start -> run server
@@ -80,13 +92,13 @@ func (s *Server) Start(address string) error {
 	s.listener = listener
 	for {
 		conn, err := listener.Accept()
-		// 关闭了
+		// closed
 		if err == net.ErrClosed {
 
 			return nil
 		}
 		if err != nil {
-			// 可以考虑打印日志
+			// consider printing logs
 			fmt.Printf("server: accept connection got error: %v", err)
 			continue
 		}
@@ -137,6 +149,8 @@ func (s *Server) handleConn(conn net.Conn) {
 		if req.Meta["one-way"] == "true" {
 			// 什么也不需要处理。
 			// 这样就相当于直接把连接资源释放了，去接收下一个请求了
+			// nothing needs to be dealt with.
+			// this is equivalent to directly releasing the connection resources to receive the next request
 			cancel()
 			continue
 		}
@@ -171,6 +185,7 @@ func (s *Server) Invoke(ctx context.Context, req *message.Request) *message.Resp
 type reflectionStub struct {
 	s           Service
 	serializers []serialize.Serializer
+	compressors []compress.Compressor
 	methods     map[string]reflect.Value
 }
 
@@ -179,6 +194,8 @@ func (s *reflectionStub) Invoke(ctx context.Context, req *message.Request) *mess
 	response := &message.Response{
 		Version:    req.Version,
 		Compresser: req.Compresser,
+		// Theoretically, you can use another serialization protocol here,
+		// but it is unnecessary to expose this function to users
 		Serializer: req.Serializer,
 		MessageId:  req.MessageId,
 	}
@@ -189,13 +206,24 @@ func (s *reflectionStub) Invoke(ctx context.Context, req *message.Request) *mess
 		return response
 	}
 	in := reflect.New(method.Type().In(1).Elem())
-	//err := json.Unmarshal(reqData, in.Interface())
-	serializer := s.serializers[req.Serializer]
-	err := serializer.Decode(req.Data, in.Interface())
+
+	// decompress request data
+	compresser := s.compressors[req.Compresser]
+	reqData, err := compresser.Uncompress(req.Data)
 	if err != nil {
 		response.Error = []byte(err.Error())
 		return response
 	}
+
+	// deserialize Request Data
+	// err := json.Unmarshal(reqData, in.Interface())
+	serializer := s.serializers[req.Serializer]
+	err = serializer.Decode(reqData, in.Interface())
+	if err != nil {
+		response.Error = []byte(err.Error())
+		return response
+	}
+
 	res := method.Call(
 		[]reflect.Value{reflect.ValueOf(ctx), in})
 
@@ -204,11 +232,22 @@ func (s *reflectionStub) Invoke(ctx context.Context, req *message.Request) *mess
 			res[1].Interface().(error).Error())
 		return response
 	}
-	data, err := serializer.Encode(res[0].Interface())
+
+	// serialize response data
+	respData, err := serializer.Encode(res[0].Interface())
+	if err != nil {
+		// server error
+		response.Error = []byte(err.Error())
+		return response
+	}
+
+	// compress response data
+	respData, err = compresser.Compress(respData)
 	if err != nil {
 		response.Error = []byte(err.Error())
 		return response
 	}
-	response.Data = data
+
+	response.Data = respData
 	return response
 }

@@ -2,6 +2,8 @@ package rpc
 
 import (
 	"context"
+	"emicro/rpc/compress"
+	"emicro/rpc/compress/gzip"
 	"emicro/rpc/message"
 	"encoding/json"
 	"fmt"
@@ -15,6 +17,10 @@ import (
 )
 
 func TestServer_handleConnection(t *testing.T) {
+	testServerHandleConnection(t, gzip.Compressor{})
+}
+
+func testServerHandleConnection(t *testing.T, c compress.Compressor) {
 	// 用的是 json 来作为数据传输格式
 	testCases := []struct {
 		name     string
@@ -26,14 +32,19 @@ func TestServer_handleConnection(t *testing.T) {
 			name:    "user service",
 			service: &UserService{},
 			conn: &mockConn{
-				readData: newRequestBytes(t, "user-service", "GetById", &AnyRequest{}),
+				readData: newRequestBytes(t, "user-service", "GetById", &AnyRequest{}, c),
 			},
-			wantResp: []byte(`{"msg":"这是GetById的响应"}`),
+			wantResp: func() []byte {
+				data := []byte(`{"msg":"这是GetById的响应"}`)
+				data, _ = c.Compress(data)
+				return data
+			}(),
 		},
 	}
 	for _, tc := range testCases {
 		server := NewServer()
 		err := server.RegisterService(tc.service)
+		server.RegisterCompressor(c)
 		require.NoError(t, err)
 		err = server.TestHandleConn(tc.conn)
 		require.NoError(t, err)
@@ -108,8 +119,10 @@ func (u *UserService) GetById(ctx context.Context, request *AnyRequest) (*AnyRes
 	}, nil
 }
 
-func newRequestBytes(t *testing.T, service string, method string, input any) []byte {
+func newRequestBytes(t *testing.T, service string, method string, input any, c compress.Compressor) []byte {
 	data, err := json.Marshal(input)
+	require.NoError(t, err)
+	data, err = c.Compress(data)
 	require.NoError(t, err)
 	req := &message.Request{
 		ServiceName: service,
@@ -117,6 +130,7 @@ func newRequestBytes(t *testing.T, service string, method string, input any) []b
 		Data:        data,
 		// 固定用 json
 		Serializer: 1,
+		Compresser: 1,
 	}
 	req.SetHeadLength()
 	req.SetBodyLength()

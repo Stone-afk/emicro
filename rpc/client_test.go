@@ -2,7 +2,10 @@ package rpc
 
 import (
 	"context"
+	"emicro/rpc/compress"
+	"emicro/rpc/compress/gzip"
 	"emicro/rpc/message"
+	"emicro/rpc/serialize"
 	"emicro/rpc/serialize/json"
 	"errors"
 	"github.com/stretchr/testify/assert"
@@ -10,7 +13,10 @@ import (
 )
 
 func Test_setFuncField(t *testing.T) {
-	serializer := json.Serializer{}
+	testSetFuncField(t, gzip.Compressor{}, json.Serializer{})
+}
+
+func testSetFuncField(t *testing.T, compressor compress.Compressor, serializer serialize.Serializer) {
 	testCases := []struct {
 		name        string
 		service     *mockService
@@ -49,16 +55,22 @@ func Test_setFuncField(t *testing.T) {
 				}
 			}(),
 			proxy: &mockProxy{
-				t: t,
-				req: &message.Request{
-					HeadLength:  36,
-					BodyLength:  16,
-					MessageId:   2,
-					ServiceName: "user-service",
-					Method:      "GetById",
-					Serializer:  serializer.Code(),
-					Data:        []byte(`{"msg":"123456"}`),
-				},
+				t:          t,
+				compressor: compressor,
+				req: func() *message.Request {
+					data := []byte(`{"msg":"123456"}`)
+					req := &message.Request{
+						MessageId:   2,
+						Compresser:  compressor.Code(),
+						ServiceName: "user-service",
+						Method:      "GetById",
+						Serializer:  serializer.Code(),
+					}
+					req.Data, _ = compressor.Compress(data)
+					req.SetHeadLength()
+					req.SetBodyLength()
+					return req
+				}(),
 				resp: &message.Response{
 					Data: []byte(`{"msg":"这是123456的响应"}`),
 				},
@@ -70,7 +82,7 @@ func Test_setFuncField(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := setFuncField(serializer, tc.service.s, tc.proxy)
+			err := setFuncField(serializer, compressor, tc.service.s, tc.proxy)
 			assert.Equal(t, tc.wantInitErr, err)
 			if err != nil {
 				return
@@ -80,16 +92,18 @@ func Test_setFuncField(t *testing.T) {
 			if err != nil {
 				return
 			}
-			assert.Equal(t, tc.wantResp, resp)
+			assert.EqualValues(t, tc.wantResp, resp)
 		})
 	}
 }
 
 type mockProxy struct {
-	t    *testing.T
-	req  *message.Request
-	resp *message.Response
-	err  error
+	t          *testing.T
+	req        *message.Request
+	resp       *message.Response
+	compressor compress.Compressor
+	serializer serialize.Serializer
+	err        error
 }
 
 func (p *mockProxy) Invoke(ctx context.Context, req *message.Request) (*message.Response, error) {
@@ -97,6 +111,12 @@ func (p *mockProxy) Invoke(ctx context.Context, req *message.Request) (*message.
 		return nil, p.err
 	}
 	assert.Equal(p.t, p.req, req)
+	var data []byte
+	data, err := p.compressor.Compress(p.resp.Data)
+	if err != nil {
+		return nil, err
+	}
+	p.resp.Data = data
 	return p.resp, nil
 }
 
