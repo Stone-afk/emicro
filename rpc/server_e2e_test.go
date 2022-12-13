@@ -4,6 +4,7 @@ package rpc
 
 import (
 	"context"
+	"emicro/rpc/compress/gzip"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -11,6 +12,7 @@ import (
 func TestServer_Start(t *testing.T) {
 	s := NewServer()
 	s.RegisterService(&UserServiceServer{})
+	s.RegisterCompressor(gzip.Compressor{})
 	err := s.Start(":8085")
 	require.NoError(t, err)
 }
