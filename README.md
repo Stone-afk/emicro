@@ -21,9 +21,10 @@
   - 消息 ID：用于后续支持多路复用 
   - 服务名 
   - 方法名 
-
 - 不固定字段：这部分主要是链路元数据。
 - 请求数据
+
+![输入图片说明](imagesimage.png)
 
 **响应**
 
@@ -40,13 +41,8 @@
   - 错误：为了解决第二个返回值的问题
 - 响应数据
 
-
-
-
-
-![image-20221214194919036](C:\Users\canway\AppData\Roaming\Typora\typora-user-images\image-20221214194919036.png)
+![输入图片说明](imagesimage.png)
 
 ##### 服务注册与发现
-
-![image-20221214195902151](C:\Users\canway\AppData\Roaming\Typora\typora-user-images\image-20221214195902151.png)
+![输入图片说明](imagesimage.png)
 
