@@ -1,24 +1,48 @@
 # emicro
 
 #### 介绍
-简单的微服务框架
+简单的微服务框架，该框架目前只用与学习
 
 #### 软件架构
-软件架构说明
+部分参考go-kratos、go-zero，但存在自定义的 rpc 协议
 
-#### 参与贡献
+##### rpc协议的设计
 
-1.  Fork 本仓库
-2.  新建 Feat_xxx 分支
-3.  提交代码
-4.  新建 Pull Request
+**请求头部：**
+
+- 设计为不定长 
+- 固定字段： 
+  - 长度字段：用于分割消息 
+  - 版本字段：描述协议版本，用于后续协议升级 
+  - 序列化协议：用于标记采用的序列化协议 
+  - 压缩算法：用于标记协议体是如何被压缩的 
+  - 消息 ID：用于后续支持多路复用 
+  - 服务名 
+  - 方法名 
+
+- 不固定字段：这部分主要是链路元数据。
+- 请求数据
+
+##### 响应头部： 
+
+- 设计为不定长 
+
+- 固定字段：
+  - 长度字段：用于分割消息 版本
+  - 字段：描述协议版本，用于后续协议升级 
+  - 序列化协议：用于标记采用的序列化协议 
+  - 压缩算法：用于标记协议体是如何被压缩的 
+  - 消息 ID：用于后续支持多路复用 
+  - 错误：为了解决第二个返回值的问题
+- 响应数据
 
 
-#### 特技
 
-1.  使用 Readme\_XXX.md 来支持不同的语言，例如 Readme\_en.md, Readme\_zh.md
-2.  Gitee 官方博客 [blog.gitee.com](https://blog.gitee.com)
-3.  你可以 [https://gitee.com/explore](https://gitee.com/explore) 这个地址来了解 Gitee 上的优秀开源项目
-4.  [GVP](https://gitee.com/gvp) 全称是 Gitee 最有价值开源项目，是综合评定出的优秀开源项目
-5.  Gitee 官方提供的使用手册 [https://gitee.com/help](https://gitee.com/help)
-6.  Gitee 封面人物是一档用来展示 Gitee 会员风采的栏目 [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
+
+
+![image-20221214194919036](C:\Users\canway\AppData\Roaming\Typora\typora-user-images\image-20221214194919036.png)
+
+##### 服务注册与发现
+
+![image-20221214195902151](C:\Users\canway\AppData\Roaming\Typora\typora-user-images\image-20221214195902151.png)
+
