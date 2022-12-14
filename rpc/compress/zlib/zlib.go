@@ -1,25 +1,24 @@
-package gzip
+package zlib
 
 import (
 	"bytes"
-	"compress/gzip"
+	"compress/zlib"
 	"io"
 	"io/ioutil"
 )
 
-// GzipCompressor implements the Compressor interface
-type GzipCompressor struct {
+// ZlibCompressor implements the Compressor interface
+type ZlibCompressor struct {
 }
 
-func (_ GzipCompressor) Code() byte {
-	return 1
+func (_ ZlibCompressor) Code() byte {
+	return 4
 }
 
 // Compress data
-func (_ GzipCompressor) Compress(data []byte) ([]byte, error) {
-	// res := &bytes.Buffer{}
-	res := bytes.NewBuffer(nil)
-	w := gzip.NewWriter(res)
+func (_ ZlibCompressor) Compress(data []byte) ([]byte, error) {
+	buf := bytes.NewBuffer(nil)
+	w := zlib.NewWriter(buf)
 	_, err := w.Write(data)
 	if err != nil {
 		return nil, err
@@ -35,13 +34,12 @@ func (_ GzipCompressor) Compress(data []byte) ([]byte, error) {
 	if err = w.Close(); err != nil {
 		return nil, err
 	}
-
-	return res.Bytes(), nil
+	return buf.Bytes(), err
 }
 
 // Uncompress data
-func (_ GzipCompressor) Uncompress(data []byte) ([]byte, error) {
-	r, err := gzip.NewReader(bytes.NewReader(data))
+func (_ ZlibCompressor) Uncompress(data []byte) ([]byte, error) {
+	r, err := zlib.NewReader(bytes.NewBuffer(data))
 	if err != nil {
 		return nil, err
 	}
