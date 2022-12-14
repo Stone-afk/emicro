@@ -24,7 +24,7 @@
 - 不固定字段：这部分主要是链路元数据。
 - 请求数据
 
-![输入图片说明](imagesimage.png)
+![输入图片说明](images/image_rpc_req.png)
 
 **响应**
 
@@ -41,8 +41,8 @@
   - 错误：为了解决第二个返回值的问题
 - 响应数据
 
-![输入图片说明](imagesimage.png)
+![输入图片说明](images/image_rpc_resp.png)
 
 ##### 服务注册与发现
-![输入图片说明](imagesimage.png)
+![输入图片说明](images/image_register.png)
 
