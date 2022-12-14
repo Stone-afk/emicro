@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/golang/mock v1.6.0
 	github.com/gotomicro/ekit v0.0.4
+	github.com/pierrec/lz4/v4 v4.1.17
 	github.com/silenceper/pool v1.0.0
 	github.com/stretchr/testify v1.8.1
 	go.etcd.io/etcd/api/v3 v3.5.6
