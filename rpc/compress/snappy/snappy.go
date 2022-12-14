@@ -8,6 +8,12 @@ import (
 )
 
 // SnappyCompressor implements the Compressor interface
+// SNAPPY is an open-source compression algorithm implemented by Google.
+// Tests show that SNAPPY has a very high performance,
+// but Google has not published a related paper.
+// It can be considered that SNAPPY is an industrial algorithm.
+// SNAPPY borrows ideas from LZ77. The time complexity of LZ77 matching process is too high,
+// and Google has made many optimizations.
 type SnappyCompressor struct {
 }
 
