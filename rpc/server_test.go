@@ -17,7 +17,7 @@ import (
 )
 
 func TestServer_handleConnection(t *testing.T) {
-	testServerHandleConnection(t, gzip.Compressor{})
+	testServerHandleConnection(t, gzip.GzipCompressor{})
 }
 
 func testServerHandleConnection(t *testing.T, c compress.Compressor) {

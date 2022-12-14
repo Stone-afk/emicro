@@ -13,7 +13,7 @@ import (
 )
 
 func Test_setFuncField(t *testing.T) {
-	testSetFuncField(t, gzip.Compressor{}, json.Serializer{})
+	testSetFuncField(t, gzip.GzipCompressor{}, json.Serializer{})
 }
 
 func testSetFuncField(t *testing.T, compressor compress.Compressor, serializer serialize.Serializer) {

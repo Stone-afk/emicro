@@ -1,4 +1,4 @@
-package gzip
+package snappy
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -16,7 +16,7 @@ func TestCompressor(t *testing.T) {
 			input: []byte("hello world"),
 		},
 	}
-	c := GzipCompressor{}
+	c := SnappyCompressor{}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			data, err := c.Compress(tc.input)

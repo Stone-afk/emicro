@@ -6,32 +6,40 @@ import (
 	"io"
 )
 
-// Compressor for gzip
-type Compressor struct{}
+// GzipCompressor implements the Compressor interface
+type GzipCompressor struct {
+}
 
-func (c Compressor) Code() byte {
+func (_ GzipCompressor) Code() byte {
 	return 1
 }
 
 // Compress data
-func (c Compressor) Compress(data []byte) ([]byte, error) {
-	res := &bytes.Buffer{}
+func (_ GzipCompressor) Compress(data []byte) ([]byte, error) {
+	// res := &bytes.Buffer{}
+	res := bytes.NewBuffer(nil)
 	gw := gzip.NewWriter(res)
 	_, err := gw.Write(data)
 	if err != nil {
 		return nil, err
 	}
+	err = gw.Flush()
+	if err != nil {
+		return nil, err
+	}
 	// Defer cannot be used here. You must call Close manually
 	// Otherwise, some data has not been refreshed to res,
+	// execute Uncompress return []byte{}
 	// This is a very error prone place
 	if err = gw.Close(); err != nil {
 		return nil, err
 	}
+
 	return res.Bytes(), nil
 }
 
 // Uncompress data
-func (c Compressor) Uncompress(data []byte) ([]byte, error) {
+func (_ GzipCompressor) Uncompress(data []byte) ([]byte, error) {
 	gr, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
 		return nil, err

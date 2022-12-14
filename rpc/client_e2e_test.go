@@ -16,7 +16,7 @@ func TestNewClient(t *testing.T) {
 	require.NoError(t, err)
 	us := &UserServiceClient{}
 	serializer := json.Serializer{}
-	compressor := gzip.Compressor{}
+	compressor := gzip.GzipCompressor{}
 	err = setFuncField(serializer, compressor, us, c)
 	require.NoError(t, err)
 

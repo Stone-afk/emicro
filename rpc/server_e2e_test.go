@@ -12,7 +12,7 @@ import (
 func TestServer_Start(t *testing.T) {
 	s := NewServer()
 	s.RegisterService(&UserServiceServer{})
-	s.RegisterCompressor(gzip.Compressor{})
+	s.RegisterCompressor(gzip.GzipCompressor{})
 	err := s.Start(":8085")
 	require.NoError(t, err)
 }

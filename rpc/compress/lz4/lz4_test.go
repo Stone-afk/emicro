@@ -16,7 +16,7 @@ func TestCompressor(t *testing.T) {
 			input: []byte("hello world"),
 		},
 	}
-	c := Compressor{}
+	c := Lz4Compressor{}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			data, err := c.Compress(tc.input)
