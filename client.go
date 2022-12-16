@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/resolver"
 	"time"
 )
@@ -13,9 +14,9 @@ import (
 type ClientOption func(client *Client)
 
 type Client struct {
-	insecure bool
-	rb       resolver.Builder
-	balancer balancer.Builder
+	insecure        bool
+	rb              resolver.Builder
+	balancerBuilder balancer.Builder
 }
 
 func NewClient(opts ...ClientOption) *Client {
@@ -32,10 +33,10 @@ func (c *Client) Dial(ctx context.Context, serviceName string) (*grpc.ClientConn
 	if c.insecure {
 		opts = append(opts, grpc.WithInsecure())
 	}
-	if c.balancer != nil {
+	if c.balancerBuilder != nil {
 		opts = append(opts, grpc.WithDefaultServiceConfig(
 			fmt.Sprintf(`{"LoadBalancingPolicy": "%s"}`,
-				c.balancer.Name())))
+				c.balancerBuilder.Name())))
 	}
 	return grpc.DialContext(ctx, address, opts...)
 }
@@ -52,11 +53,10 @@ func ClientWithInsecure() ClientOption {
 	}
 }
 
-// 伪代码
-// func (c *Client) DialPsu(ctx context.Context, service string) (*grpc.ClientConn, error) {
-// 	resolver := c.rb
-//
-// 	grpc.DialContext(ctx,
-// 		"registry:///user-service",
-// 		grpc.WithResolvers(resolver))
-// }
+func ClientWithPickerBuilder(name string, pickerBuilder base.PickerBuilder) ClientOption {
+	return func(client *Client) {
+		builder := base.NewBalancerBuilder(name, pickerBuilder, base.Config{HealthCheck: true})
+		balancer.Register(builder)
+		client.balancerBuilder = builder
+	}
+}
