@@ -28,7 +28,8 @@ func main() {
 		eg.Go(func() error {
 			server := emicro.NewServer("user-service",
 				emicro.ServerWithRegistry(r),
-				emicro.ServerWithTimeout(time.Second*3))
+				emicro.ServerWithTimeout(time.Second*3),
+				emicro.ServerWithWeight(uint32(1+idx)))
 			defer func() {
 				_ = server.Close()
 			}()

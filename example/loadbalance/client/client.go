@@ -23,7 +23,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	pickerBuilder := &roundrobin.PickerBuilder{}
+	pickerBuilder := &roundrobin.WeightPickerBuilder{}
 	client := emicro.NewClient(emicro.ClientWithInsecure(),
 		emicro.ClientWithRegistry(r, time.Second*3),
 		emicro.ClientWithPickerBuilder(pickerBuilder.Name(), pickerBuilder))
