@@ -26,7 +26,12 @@ func main() {
 	for i := 0; i < 3; i++ {
 		idx := i
 		eg.Go(func() error {
+			group := "a"
+			if idx%2 == 0 {
+				group = "b"
+			}
 			server := emicro.NewServer("user-service",
+				emicro.ServerWithGroup(group),
 				emicro.ServerWithRegistry(r),
 				emicro.ServerWithTimeout(time.Second*3),
 				emicro.ServerWithWeight(uint32(1+idx)))

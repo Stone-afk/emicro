@@ -1,6 +1,7 @@
 package roundrobin
 
 import (
+	"emicro/loadbalance"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/resolver"
@@ -12,8 +13,9 @@ import (
 const WeightRoundRobin = "WEIGHT_ROUND_ROBIN"
 
 type WeightPicker struct {
-	conns []*weightConn
-	mutex sync.Mutex
+	conns  []*weightConn
+	mutex  sync.Mutex
+	filter loadbalance.Filter
 }
 
 func (p *WeightPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
@@ -24,6 +26,9 @@ func (p *WeightPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error)
 	var maxWeightConn *weightConn
 	p.mutex.Lock()
 	for _, node := range p.conns {
+		if !p.filter(info, node.address) {
+			continue
+		}
 		totalWeight += node.efficientWeight
 		node.currentWeight += node.efficientWeight
 		if maxWeightConn == nil || maxWeightConn.currentWeight < node.currentWeight {
@@ -72,9 +77,10 @@ func (p *WeightPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error)
 }
 
 type WeightPickerBuilder struct {
+	Filter loadbalance.Filter
 }
 
-func (w *WeightPickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
+func (b *WeightPickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 	conns := make([]*weightConn, 0, len(info.ReadySCs))
 	for con, conInfo := range info.ReadySCs {
 		// 这里你可以考虑容错，例如服务器没有配置权重，给一个默认的权重
@@ -89,21 +95,28 @@ func (w *WeightPickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 			address:         conInfo.Address,
 		})
 	}
+	filter := b.Filter
+	if filter == nil {
+		filter = func(info balancer.PickInfo, address resolver.Address) bool {
+			return true
+		}
+	}
 	return &WeightPicker{
-		conns: conns,
+		conns:  conns,
+		filter: filter,
 	}
 }
 
-func (w *WeightPickerBuilder) Name() string {
+func (b *WeightPickerBuilder) Name() string {
 	return WeightRoundRobin
 }
 
 type weightConn struct {
-	// 初始权重
+	// Initial weight
 	weight uint32
-	// 当前权重
+	// Current weight
 	currentWeight uint32
-	// 有效权重，在整个过程中我们是会动态调整权重的
+	// Effective weight, we will dynamically adjust the weight in the whole process
 	efficientWeight uint32
 	balancer.SubConn
 	address resolver.Address

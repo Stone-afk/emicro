@@ -1,6 +1,7 @@
 package roundrobin
 
 import (
+	"emicro/loadbalance"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/resolver"
@@ -10,9 +11,10 @@ import (
 const RoundRobin = "ROUND_ROBIN"
 
 type Picker struct {
-	cnt   uint64
-	conns []conn
-	mutex sync.Mutex
+	cnt    uint64
+	conns  []conn
+	mutex  sync.Mutex
+	filter loadbalance.Filter
 }
 
 func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
@@ -26,6 +28,9 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	defer p.mutex.Unlock()
 	candidates := make([]conn, 0, len(p.conns))
 	for _, c := range p.conns {
+		if !p.filter(info, c.address) {
+			continue
+		}
 		candidates = append(candidates, c)
 	}
 	if len(candidates) == 0 {
@@ -57,6 +62,7 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 }
 
 type PickerBuilder struct {
+	Filter loadbalance.Filter
 }
 
 func (b *PickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
@@ -67,8 +73,15 @@ func (b *PickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 			address: conInfo.Address,
 		})
 	}
+	filter := b.Filter
+	if filter == nil {
+		filter = func(info balancer.PickInfo, address resolver.Address) bool {
+			return true
+		}
+	}
 	return &Picker{
-		conns: conns,
+		conns:  conns,
+		filter: filter,
 	}
 }
 

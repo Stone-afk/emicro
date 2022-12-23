@@ -4,6 +4,7 @@ import (
 	"context"
 	"emicro"
 	"emicro/example/proto/gen"
+	"emicro/loadbalance"
 	"emicro/loadbalance/roundrobin"
 	"emicro/registry/etcd"
 	"encoding/json"
@@ -23,7 +24,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	pickerBuilder := &roundrobin.WeightPickerBuilder{}
+	pickerBuilder := &roundrobin.WeightPickerBuilder{
+		Filter: loadbalance.GroupFilter,
+	}
 	client := emicro.NewClient(emicro.ClientWithInsecure(),
 		emicro.ClientWithRegistry(r, time.Second*3),
 		emicro.ClientWithPickerBuilder(pickerBuilder.Name(), pickerBuilder))
