@@ -8,7 +8,6 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"golang.org/x/sync/errgroup"
 	"strconv"
-	"time"
 )
 
 func main() {
@@ -23,6 +22,7 @@ func main() {
 		panic(err)
 	}
 	var eg errgroup.Group
+
 	for i := 0; i < 3; i++ {
 		idx := i
 		eg.Go(func() error {
@@ -33,11 +33,9 @@ func main() {
 			server := emicro.NewServer("user-service",
 				emicro.ServerWithGroup(group),
 				emicro.ServerWithRegistry(r),
-				emicro.ServerWithTimeout(time.Second*3),
-				emicro.ServerWithWeight(uint32(1+idx)))
-			defer func() {
-				_ = server.Close()
-			}()
+				emicro.ServerWithWeight(uint32(1+i)))
+			defer server.Close()
+
 			us := &UserService{
 				name: fmt.Sprintf("server-%d", idx),
 			}
@@ -47,6 +45,7 @@ func main() {
 			return server.Start(":" + strconv.Itoa(8081+idx))
 		})
 	}
+	// 正常或者异常退出都会返回
 	err = eg.Wait()
 	fmt.Println(err)
 }

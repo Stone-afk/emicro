@@ -3,17 +3,22 @@ package main
 import (
 	"context"
 	"emicro"
+	"emicro/cluster/broadcast"
 	"emicro/example/proto/gen"
 	"emicro/loadbalance"
 	"emicro/loadbalance/roundrobin"
 	"emicro/registry/etcd"
-	"encoding/json"
 	"fmt"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/base"
+	"log"
 	"time"
 )
 
 func main() {
+	// 注册中心
 	etcdClient, err := clientv3.New(clientv3.Config{
 		Endpoints: []string{"localhost:2379"},
 	})
@@ -24,34 +29,33 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	pickerBuilder := &roundrobin.WeightPickerBuilder{
+	// 注册你的负载均衡策略
+	pickerBuilder := &roundrobin.PickerBuilder{
 		Filter: loadbalance.GroupFilter,
 	}
-	client := emicro.NewClient(emicro.ClientWithInsecure(),
-		emicro.ClientWithRegistry(r, time.Second*3),
-		emicro.ClientWithPickerBuilder(pickerBuilder.Name(), pickerBuilder))
+	builder := base.NewBalancerBuilder(pickerBuilder.Name(), pickerBuilder, base.Config{HealthCheck: true})
+	balancer.Register(builder)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
-	// 设置初始化连接的 ctx
-	conn, err := client.Dial(ctx, "user-service")
-	cancel()
+	cb := broadcast.NewClusterBuilder(r, "user-service")
+	cc, err := grpc.Dial("registry:///user-service",
+		grpc.WithInsecure(),
+		grpc.WithUnaryInterceptor(cb.BuildUnary()),
+		grpc.WithResolvers(emicro.NewResolverBuilder(r, time.Second*3)),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"LoadBalancingPolicy": "%s"}`,
+			pickerBuilder.Name())))
 	if err != nil {
 		panic(err)
 	}
-	userClient := gen.NewUserServiceClient(conn)
-	for i := 0; i < 10; i++ {
-		ctx, cancel = context.WithTimeout(context.Background(), time.Second*3)
-		resp, err := userClient.GetById(ctx, &gen.GetByIdReq{
-			Id: 12,
-		})
-		cancel()
+	client := gen.NewUserServiceClient(cc)
+	for i := 0; i < 100; i++ {
+		// 指定使用广播
+		ctx := context.Background()
+		ctx = broadcast.UsingBroadCast(ctx)
+
+		resp, err := client.GetById(ctx, &gen.GetByIdReq{})
 		if err != nil {
 			panic(err)
 		}
-		bs, err := json.Marshal(resp.User)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println(string(bs))
+		log.Println(resp.User)
 	}
 }
