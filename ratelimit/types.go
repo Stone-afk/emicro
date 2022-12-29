@@ -21,3 +21,9 @@ var markLimitedRejection rejectStrategy = func(ctx context.Context, req interfac
 	ctx = context.WithValue(ctx, "limited", true)
 	return handler(ctx, req)
 }
+
+type Guardian interface {
+	Allow(ctx context.Context, req interface{}) (cb func(), err error)
+	AllowV1(ctx context.Context, req interface{}) (cb func(), resp interface{}, err error)
+	OnRejection(ctx context.Context, req interface{}) (interface{}, error)
+}
