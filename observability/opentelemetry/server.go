@@ -18,15 +18,15 @@ type ServerInterceptorBuilder struct {
 	Tracer trace.Tracer
 }
 
-func (s ServerInterceptorBuilder) BuildUnary() grpc.UnaryServerInterceptor {
-	if s.Tracer == nil {
-		s.Tracer = otel.GetTracerProvider().Tracer(instrumentationName)
+func (b *ServerInterceptorBuilder) BuildUnary() grpc.UnaryServerInterceptor {
+	if b.Tracer == nil {
+		b.Tracer = otel.GetTracerProvider().Tracer(instrumentationName)
 	}
 	address := observability.GetOutboundIP()
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler) (resp interface{}, err error) {
-		ctx, span := s.Tracer.Start(ctx, info.FullMethod, trace.WithSpanKind(trace.SpanKindServer))
-		ctx = s.extract(ctx)
+		ctx, span := b.Tracer.Start(ctx, info.FullMethod, trace.WithSpanKind(trace.SpanKindServer))
+		ctx = b.extract(ctx)
 		// 这里可以记录非常多的数据，一般来说可以考虑机器本身的信息，例如 ip，端口
 		// 也可以考虑进一步记录和请求有关的信息，例如业务 ID
 		span.SetAttributes(attribute.String("address", address))
@@ -43,7 +43,7 @@ func (s ServerInterceptorBuilder) BuildUnary() grpc.UnaryServerInterceptor {
 	}
 }
 
-func (s *ServerInterceptorBuilder) extract(ctx context.Context) context.Context {
+func (b *ServerInterceptorBuilder) extract(ctx context.Context) context.Context {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		md = metadata.MD{}
