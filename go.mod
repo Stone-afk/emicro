@@ -13,6 +13,7 @@ require (
 	github.com/stretchr/testify v1.8.1
 	go.etcd.io/etcd/api/v3 v3.5.6
 	go.etcd.io/etcd/client/v3 v3.5.6
+	go.opentelemetry.io/otel/trace v1.11.2
 	golang.org/x/net v0.2.0
 	golang.org/x/sync v0.0.0-20220819030929-7fc1605a5dde
 	google.golang.org/grpc v1.51.0
@@ -36,6 +37,7 @@ require (
 	github.com/prometheus/procfs v0.6.0 // indirect
 	github.com/sirupsen/logrus v1.6.0 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.6 // indirect
+	go.opentelemetry.io/otel v1.11.2 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.17.0 // indirect

@@ -19,7 +19,7 @@ type ServerInterceptorBuilder struct {
 	Port string
 }
 
-func (b ServerInterceptorBuilder) BuildUnary() grpc.UnaryServerInterceptor {
+func (b *ServerInterceptorBuilder) BuildUnary() grpc.UnaryServerInterceptor {
 	address := observability.GetOutboundIP()
 	if b.Port != "" {
 		address = address + ":" + b.Port

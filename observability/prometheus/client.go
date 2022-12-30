@@ -16,7 +16,7 @@ type ClientInterceptorBuilder struct {
 	Port      string
 }
 
-func (b ClientInterceptorBuilder) BuildUnary() grpc.UnaryClientInterceptor {
+func (b *ClientInterceptorBuilder) BuildUnary() grpc.UnaryClientInterceptor {
 	// 也可以考虑使用服务注册的地址
 	address := observability.GetOutboundIP()
 	// 这个部分可以简化，比如说用默认值，只需要用户传入一个应用名字
