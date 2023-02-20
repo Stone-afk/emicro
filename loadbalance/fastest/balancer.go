@@ -4,7 +4,6 @@ import (
 	"emicro/loadbalance"
 	"encoding/json"
 	"fmt"
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/resolver"
 	"log"
@@ -25,11 +24,11 @@ type Picker struct {
 	endpoint string
 }
 
-func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+func (p *Picker) Pick(info loadbalance.PickInfo) (loadbalance.PickResult, error) {
 	p.mutex.Lock()
 	if len(p.conns) == 0 {
 		p.mutex.RUnlock()
-		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
+		return loadbalance.PickResult{}, loadbalance.ErrNoSubConnAvailable
 	}
 	var res *conn
 	for _, c := range p.conns {
@@ -45,9 +44,9 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	}
 	p.mutex.RUnlock()
 
-	return balancer.PickResult{
+	return loadbalance.PickResult{
 		SubConn: res.SubConn,
-		Done: func(info balancer.DoneInfo) {
+		Done: func(info loadbalance.DoneInfo) {
 		},
 	}, nil
 }
@@ -111,7 +110,7 @@ type PickerBuilder struct {
 	Interval time.Duration
 }
 
-func (b *PickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
+func (b *PickerBuilder) Build(info base.PickerBuildInfo) loadbalance.Picker {
 	conns := make([]*conn, 0, len(info.ReadySCs))
 	for con, conInfo := range info.ReadySCs {
 		conns = append(conns, &conn{
@@ -124,7 +123,7 @@ func (b *PickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 	}
 	filter := b.Filter
 	if filter == nil {
-		filter = func(info balancer.PickInfo, address resolver.Address) bool {
+		filter = func(info loadbalance.PickInfo, address resolver.Address) bool {
 			return true
 		}
 	}
@@ -158,7 +157,7 @@ func (b *PickerBuilder) Name() string {
 }
 
 type conn struct {
-	balancer.SubConn
+	loadbalance.SubConn
 	address resolver.Address
 	// response time
 	response time.Duration

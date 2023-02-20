@@ -2,7 +2,6 @@ package roundrobin
 
 import (
 	"emicro/loadbalance"
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/resolver"
 	"sync"
@@ -17,7 +16,7 @@ type Picker struct {
 	filter loadbalance.Filter
 }
 
-func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+func (p *Picker) Pick(info loadbalance.PickInfo) (loadbalance.PickResult, error) {
 	//It is theoretically feasible to use atomic operations instead of locks,
 	// But the final effect is not a strict polling, but a rough polling
 	//In this case, why not use random directly?
@@ -34,14 +33,14 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		candidates = append(candidates, c)
 	}
 	if len(candidates) == 0 {
-		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
+		return loadbalance.PickResult{}, loadbalance.ErrNoSubConnAvailable
 	}
 	index := p.cnt % uint64(len(candidates))
 	p.cnt += 1
-	return balancer.PickResult{
+	return loadbalance.PickResult{
 		SubConn: candidates[index].SubConn,
 		// Used to design a feedback load balancing strategy
-		Done: func(info balancer.DoneInfo) {
+		Done: func(info loadbalance.DoneInfo) {
 			//It can be labeled as unhealthy
 			// if info. Err != nil {
 			// }
@@ -65,7 +64,7 @@ type PickerBuilder struct {
 	Filter loadbalance.Filter
 }
 
-func (b *PickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
+func (b *PickerBuilder) Build(info base.PickerBuildInfo) loadbalance.Picker {
 	conns := make([]conn, 0, len(info.ReadySCs))
 	for con, conInfo := range info.ReadySCs {
 		conns = append(conns, conn{
@@ -75,7 +74,7 @@ func (b *PickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 	}
 	filter := b.Filter
 	if filter == nil {
-		filter = func(info balancer.PickInfo, address resolver.Address) bool {
+		filter = func(info loadbalance.PickInfo, address resolver.Address) bool {
 			return true
 		}
 	}
@@ -90,6 +89,6 @@ func (b *PickerBuilder) Name() string {
 }
 
 type conn struct {
-	balancer.SubConn
+	loadbalance.SubConn
 	address resolver.Address
 }
