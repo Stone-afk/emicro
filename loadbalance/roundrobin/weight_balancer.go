@@ -2,6 +2,7 @@ package roundrobin
 
 import (
 	"emicro/loadbalance"
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/resolver"
 	"math"
@@ -17,9 +18,9 @@ type WeightPicker struct {
 	filter loadbalance.Filter
 }
 
-func (p *WeightPicker) Pick(info loadbalance.PickInfo) (loadbalance.PickResult, error) {
+func (p *WeightPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	if len(p.conns) == 0 {
-		return loadbalance.PickResult{}, loadbalance.ErrNoSubConnAvailable
+		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 	}
 	var totalWeight uint32
 	var maxWeightConn *weightConn
@@ -36,9 +37,9 @@ func (p *WeightPicker) Pick(info loadbalance.PickInfo) (loadbalance.PickResult, 
 	}
 	maxWeightConn.currentWeight -= totalWeight
 	p.mutex.Unlock()
-	return loadbalance.PickResult{
+	return balancer.PickResult{
 		SubConn: maxWeightConn.SubConn,
-		Done: func(info loadbalance.DoneInfo) {
+		Done: func(info balancer.DoneInfo) {
 			for {
 				// 这里就是一个棘手的地方了
 				// 按照算法，如果调用没有问题，那么增加权重
@@ -79,7 +80,7 @@ type WeightPickerBuilder struct {
 	Filter loadbalance.Filter
 }
 
-func (b *WeightPickerBuilder) Build(info base.PickerBuildInfo) loadbalance.Picker {
+func (b *WeightPickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 	conns := make([]*weightConn, 0, len(info.ReadySCs))
 	for con, conInfo := range info.ReadySCs {
 		// 这里你可以考虑容错，例如服务器没有配置权重，给一个默认的权重
@@ -96,7 +97,7 @@ func (b *WeightPickerBuilder) Build(info base.PickerBuildInfo) loadbalance.Picke
 	}
 	filter := b.Filter
 	if filter == nil {
-		filter = func(info loadbalance.PickInfo, address resolver.Address) bool {
+		filter = func(info balancer.PickInfo, address resolver.Address) bool {
 			return true
 		}
 	}
@@ -117,6 +118,6 @@ type weightConn struct {
 	currentWeight uint32
 	// Effective weight, we will dynamically adjust the weight in the whole process
 	efficientWeight uint32
-	loadbalance.SubConn
+	balancer.SubConn
 	address resolver.Address
 }
