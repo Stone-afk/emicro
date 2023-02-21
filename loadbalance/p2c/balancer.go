@@ -93,9 +93,6 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		chosen = p.choose(node1, node2)
 	}
 
-	atomic.AddInt64(&chosen.inflight, 1)
-	atomic.AddInt64(&chosen.requests, 1)
-
 	return balancer.PickResult{
 		SubConn: chosen.SubConn,
 		Done:    p.buildCallback(chosen),
@@ -125,6 +122,8 @@ func (p *Picker) choose(c1, c2 *Conn) *Conn {
 func (p *Picker) buildCallback(c *Conn) func(info balancer.DoneInfo) {
 	// call time
 	start := int64(xtime.Now())
+	atomic.AddInt64(&c.inflight, 1)
+	atomic.AddInt64(&c.requests, 1)
 	return func(info balancer.DoneInfo) {
 		atomic.AddInt64(&c.inflight, -1)
 		// call completion time
@@ -180,14 +179,17 @@ type Conn struct {
 	balancer.SubConn
 	address resolver.Address
 	// client statistic data
+	// average call delay (used to save ewma value)
 	latency uint64
+	// request success number
 	success uint64
-
+	// the number of requests currently being processed by the node
 	inflight int64
-	// request number in a period time
+	// total number of requests
 	requests int64
-	// last lastPick timestamp
+	// last request completion time, used to calculate ewma value
 	last int64
+	// last selected time point
 	pick int64
 }
 
