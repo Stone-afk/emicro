@@ -26,11 +26,31 @@ func TestP2cPicker_Pick(t *testing.T) {
 		err        error
 		threshold  float64
 	}{
-		{},
+		{
+			name:       "empty",
+			candidates: 0,
+			err:        balancer.ErrNoSubConnAvailable,
+		},
+		{
+			name:       "single",
+			candidates: 1,
+			threshold:  0.9,
+		},
+		{
+			name:       "two",
+			candidates: 2,
+			threshold:  0.5,
+		},
+		{
+			name:       "multiple",
+			candidates: 100,
+			threshold:  0.95,
+		},
 	}
 	for _, tt := range testCases {
 		tc := tt
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
 		})
 	}
