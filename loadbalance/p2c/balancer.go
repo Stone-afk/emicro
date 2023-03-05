@@ -30,8 +30,8 @@ const (
 	forcePick = int64(time.Second)
 	pickTimes = 3
 	// default value from finagle
-	decayTime   = int64(time.Second * 10)
-	logInterval = time.Minute
+	decayTime = int64(time.Second * 10)
+	//logInterval = time.Minute
 )
 
 var emptyPickResult balancer.PickResult
