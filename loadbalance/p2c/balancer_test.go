@@ -2,10 +2,12 @@ package p2c
 
 import (
 	"context"
+	xstring "emicro/internal/utils/xstring"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/resolver"
+	"strconv"
 	"testing"
 )
 
@@ -51,7 +53,22 @@ func TestP2cPicker_Pick(t *testing.T) {
 		tc := tt
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+			const total = 10000
+			builder := new(PickerBuilder)
+			ready := make(map[balancer.SubConn]base.SubConnInfo)
+			for i := 0; i < tc.candidates; i++ {
+				ready[mockClientConn{
+					id: xstring.Rand(),
+				}] = base.SubConnInfo{
+					Address: resolver.Address{
+						Addr: strconv.Itoa(i),
+					},
+				}
+			}
 
+			_ = builder.Build(base.PickerBuildInfo{
+				ReadySCs: ready,
+			})
 		})
 	}
 
