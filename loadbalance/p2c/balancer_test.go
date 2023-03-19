@@ -2,10 +2,18 @@ package p2c
 
 import (
 	"context"
+	xmath "emicro/internal/utils/xmath"
+	xstring "emicro/internal/utils/xstring"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/status"
+	"runtime"
+	"strconv"
+	"sync"
 	"testing"
 )
 
@@ -51,7 +59,53 @@ func TestP2cPicker_Pick(t *testing.T) {
 		tc := tt
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+			const total = 10000
+			builder := new(PickerBuilder)
+			ready := make(map[balancer.SubConn]base.SubConnInfo)
+			for i := 0; i < tc.candidates; i++ {
+				ready[mockClientConn{
+					id: xstring.Rand(),
+				}] = base.SubConnInfo{
+					Address: resolver.Address{
+						Addr: strconv.Itoa(i),
+					},
+				}
+			}
+			picker := builder.Build(base.PickerBuildInfo{
+				ReadySCs: ready,
+			})
+			var wg sync.WaitGroup
+			wg.Add(total)
+			for i := 0; i < total; i++ {
+				result, err := picker.Pick(balancer.PickInfo{
+					FullMethodName: "/",
+					Ctx:            context.Background(),
+				})
+				assert.Equal(t, tc.err, err)
 
+				if tc.err != nil {
+					return
+				}
+				if i%100 == 0 {
+					err = status.Error(codes.DeadlineExceeded, "deadline")
+				}
+				go func() {
+					runtime.Gosched()
+					result.Done(balancer.DoneInfo{
+						Err: err,
+					})
+					wg.Done()
+				}()
+			}
+			wg.Wait()
+			dist := make(map[any]int)
+			conns := picker.(*Picker).conns
+			for _, conn := range conns {
+				dist[conn.address.Addr] = int(conn.requests)
+			}
+			entropy := xmath.CalcEntropy(dist)
+			assert.True(t, entropy > tc.threshold, fmt.Sprintf("entropy is %f, less than %f",
+				entropy, tc.threshold))
 		})
 	}
 
