@@ -30,8 +30,8 @@ const (
 	forcePick = int64(time.Second)
 	pickTimes = 3
 	// default value from finagle
-	decayTime = int64(time.Second * 10)
-	//logInterval = time.Minute
+	decayTime   = int64(time.Second * 10)
+	logInterval = time.Minute
 )
 
 var emptyPickResult balancer.PickResult
@@ -54,6 +54,7 @@ func (b *PickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 	return &Picker{
 		conns: conns,
 		r:     rand.New(rand.NewSource(time.Now().UnixNano())),
+		stamp: xsync.NewAtomicDuration(),
 	}
 }
 
@@ -158,6 +159,13 @@ func (p *Picker) buildCallback(c *Conn) func(info balancer.DoneInfo) {
 		oldSuccess := atomic.LoadUint64(&c.success)
 		atomic.StoreUint64(&c.success, uint64(float64(oldSuccess)*w+float64(success)*(1-w)))
 
+		stamp := p.stamp.Load()
+		if now-stamp >= logInterval {
+			if p.stamp.CompareAndSwap(stamp, now) {
+				p.logStats()
+			}
+		}
+
 	}
 }
 
@@ -171,7 +179,6 @@ func (p *Picker) logStats() {
 		stats = append(stats, fmt.Sprintf("conn: %s, load: %d, reqs: %d",
 			conn.address.Addr, conn.load(), atomic.SwapInt64(&conn.requests, 0)))
 	}
-
 	p.logFunc("p2c - %s", strings.Join(stats, "; "))
 }
 
