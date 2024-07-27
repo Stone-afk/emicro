@@ -7,6 +7,7 @@ import (
 	"emicro/v5/rpc/message"
 	"emicro/v5/rpc/serialize"
 	"emicro/v5/rpc/serialize/json"
+	"emicro/v5/rpc/tcp"
 	"errors"
 	"github.com/gotomicro/ekit/bean/option"
 	"github.com/silenceper/pool"
@@ -138,9 +139,56 @@ func setFuncField(serializer serialize.Serializer,
 	return nil
 }
 
+// Invoke -> invoke rpc service
 func (c *Client) Invoke(ctx context.Context, request *message.Request) (*message.Response, error) {
-	//TODO implement me
-	panic("implement me")
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	var (
+		resp *message.Response
+		err  error
+	)
+	ch := make(chan struct{})
+	go func() {
+		encode := message.EncodeReq(request)
+		resp, err = c.doInvoke(ctx, encode)
+		ch <- struct{}{}
+		close(ch)
+	}()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-ch:
+		return resp, err
+	}
+}
+
+// doInvoke -> invoke rpc service
+func (c *Client) doInvoke(ctx context.Context, encode []byte) (*message.Response, error) {
+	val, err := c.connPool.Get()
+	if err != nil {
+		return nil, errs.ClientConnDeaded(err)
+	}
+	// put back
+	defer func() {
+		_ = c.connPool.Put(val)
+	}()
+	conn := val.(net.Conn)
+	l, err := conn.Write(encode)
+	if err != nil {
+		return nil, err
+	}
+	if l != len(encode) {
+		return nil, errs.ClientNotAllWritten
+	}
+	if isOneway(ctx) {
+		return nil, errs.OnewayError
+	}
+	data, err := tcp.ReadMsg(conn)
+	if err != nil {
+		return nil, errs.ReadRespFailError
+	}
+	return message.DecodeResp(data), nil
 }
 
 // ClientWithSerializer -> option
