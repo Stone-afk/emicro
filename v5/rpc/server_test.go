@@ -107,8 +107,7 @@ type mockConn struct {
 	writeErr  error
 }
 
-type UserService struct {
-}
+type UserService struct{}
 
 func (u *UserService) Name() string {
 	return "user-service"
@@ -118,6 +117,14 @@ func (u *UserService) GetById(ctx context.Context, request *AnyRequest) (*AnyRes
 	return &AnyResponse{
 		Msg: "这是GetById的响应",
 	}, nil
+}
+
+type AnyRequest struct {
+	Msg string `json:"msg"`
+}
+
+type AnyResponse struct {
+	Msg string `json:"msg"`
 }
 
 func newRequestBytes(t *testing.T, service string, method string, input any, c compress.Compressor) []byte {
