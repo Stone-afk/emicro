@@ -27,9 +27,8 @@ func NewClient(opts ...ClientOption) *Client {
 	return client
 }
 
-func (c *Client) Dial(ctx context.Context, serviceName string) (*grpc.ClientConn, error) {
+func (c *Client) Dial(ctx context.Context, serviceName string, dialOptions ...grpc.DialOption) (*grpc.ClientConn, error) {
 	opts := []grpc.DialOption{grpc.WithResolvers(c.rb)}
-	address := fmt.Sprintf("registry:///%s", serviceName)
 	if c.insecure {
 		opts = append(opts, grpc.WithInsecure())
 	}
@@ -38,7 +37,10 @@ func (c *Client) Dial(ctx context.Context, serviceName string) (*grpc.ClientConn
 			fmt.Sprintf(`{"LoadBalancingPolicy": "%s"}`,
 				c.balancerBuilder.Name())))
 	}
-	return grpc.DialContext(ctx, address, opts...)
+	if len(dialOptions) > 0 {
+		opts = append(opts, dialOptions...)
+	}
+	return grpc.DialContext(ctx, fmt.Sprintf("registry:///%s", serviceName), opts...)
 }
 
 func ClientWithRegistry(r registry.Registry, timeout time.Duration) ClientOption {
