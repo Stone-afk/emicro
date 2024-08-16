@@ -28,8 +28,8 @@ type Event struct {
 //go:generate mockgen -package=mocks -destination=mocks/registry.mock.go -source=types.go Registry
 type Registry interface {
 	io.Closer
-	Register(ctx context.Context, inst ServiceInstance) error
-	Unregister(ctx context.Context, inst ServiceInstance) error
-	ListServices(ctx context.Context, ServiceName string) ([]ServiceInstance, error)
+	Register(ctx context.Context, ins ServiceInstance) error
+	Unregister(ctx context.Context, ins ServiceInstance) error
+	ListServices(ctx context.Context, serviceName string) ([]ServiceInstance, error)
 	Subscribe(serviceName string) (<-chan Event, error)
 }
