@@ -19,16 +19,24 @@ var typesMap = map[mvccpb.Event_EventType]registry.EventType{
 var _ registry.Registry = (*Registry)(nil)
 
 type Registry struct {
-	client      *clientv3.Client
-	sess        *concurrency.Session
-	mutex       sync.RWMutex
-	SessTimeout int64
-	watchCancel []func()
+	client       *clientv3.Client
+	sess         *concurrency.Session
+	mutex        sync.RWMutex
+	SessTimeout  int64
+	watchCancels []func()
 }
 
 func (r *Registry) Close() error {
-	//TODO implement me
-	panic("implement me")
+	r.mutex.Lock()
+	cancels := r.watchCancels
+	r.watchCancels = nil
+	r.mutex.Unlock()
+	for _, cancel := range cancels {
+		cancel()
+	}
+	// r.client.Close()
+	// 因为 client 是外面传进来的，所以我们这里不能关掉它。它可能被其它的人使用着
+	return r.sess.Close()
 }
 
 func (r *Registry) Register(ctx context.Context, ins registry.ServiceInstance) error {
@@ -71,8 +79,38 @@ func (r *Registry) ListServices(ctx context.Context, serviceName string) ([]regi
 }
 
 func (r *Registry) Subscribe(serviceName string) (<-chan registry.Event, error) {
-	//TODO implement me
-	panic("implement me")
+	ctx, cancel := context.WithCancel(context.Background())
+	r.mutex.Lock()
+	r.watchCancels = append(r.watchCancels, cancel)
+	r.mutex.Unlock()
+	ctx = clientv3.WithRequireLeader(ctx)
+	watchResp := r.client.Watch(ctx, r.serviceKey(serviceName), clientv3.WithPrefix())
+	res := make(chan registry.Event)
+	go func() {
+		for {
+			select {
+			case resp := <-watchResp:
+				if resp.Err() != nil {
+					//return
+					continue
+				}
+				if resp.Canceled {
+					return
+				}
+				//for range resp.Events {
+				//	res <- registry.Event{}
+				//}
+				for _, event := range resp.Events {
+					res <- registry.Event{
+						Type: typesMap[event.Type],
+					}
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return res, nil
 }
 
 func (r *Registry) instanceKey(ins registry.ServiceInstance) string {
