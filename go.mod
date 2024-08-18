@@ -15,6 +15,7 @@ require (
 	go.etcd.io/etcd/client/v3 v3.5.6
 	go.opentelemetry.io/otel v1.11.2
 	go.opentelemetry.io/otel/trace v1.11.2
+	go.uber.org/mock v0.4.0
 	golang.org/x/net v0.2.0
 	golang.org/x/sync v0.0.0-20220819030929-7fc1605a5dde
 	google.golang.org/grpc v1.51.0
