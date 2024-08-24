@@ -9,9 +9,8 @@ import (
 
 func TestPicker_Pick(t *testing.T) {
 	testCases := []struct {
-		name string
-		p    *Picker
-
+		name            string
+		p               *Picker
 		wantErr         error
 		wantSubConn     conn
 		wantPickerIndex uint64
