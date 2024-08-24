@@ -14,7 +14,7 @@ func main() {
 		panic(err)
 	}
 	us := &UserService{}
-	err = c.InitClientProxy(us)
+	err = c.InitService(us)
 	if err != nil {
 		panic(err)
 	}
@@ -69,7 +69,7 @@ func main() {
 	fmt.Printf("收到错误信息: %s \n", err.Error())
 
 	usProto := &UserServiceProto{}
-	err = c.InitClientProxy(usProto)
+	err = c.InitService(usProto)
 	presp, err := usProto.GetById(context.Background(), &gen.GetByIdReq{})
 	if err != nil {
 		panic(err)

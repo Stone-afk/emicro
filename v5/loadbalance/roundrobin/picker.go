@@ -20,11 +20,12 @@ type PickerBuilder struct {
 }
 
 func (b *PickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
-	connections := make([]conn, 0, len(info.ReadySCs))
+	connections := make([]balancer.SubConn, 0, len(info.ReadySCs))
 	for con, conInfo := range info.ReadySCs {
 		connections = append(connections, conn{
 			SubConn: con,
 			address: conInfo.Address,
+			name:    conInfo.Address.Addr,
 		})
 	}
 	filter := b.Filter
@@ -45,7 +46,7 @@ func (b *PickerBuilder) Name() string {
 
 type Picker struct {
 	cnt         uint64
-	connections []conn
+	connections []balancer.SubConn
 	mutex       sync.Mutex
 	filter      loadbalance.Filter
 }
@@ -59,9 +60,9 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	// atomic.StoreUint32(&b.cnt, index)
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	candidates := make([]conn, 0, len(p.connections))
+	candidates := make([]balancer.SubConn, 0, len(p.connections))
 	for _, c := range p.connections {
-		if !p.filter(info, c.address) {
+		if !p.filter(info, c.(conn).address) {
 			continue
 		}
 		candidates = append(candidates, c)
@@ -72,7 +73,8 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	index := p.cnt % uint64(len(candidates))
 	p.cnt += 1
 	return balancer.PickResult{
-		SubConn: candidates[index].SubConn,
+		SubConn: candidates[index],
+		//SubConn: candidates[index].SubConn,
 		// Used to design a feedback load balancing strategy
 		Done: func(info balancer.DoneInfo) {
 			//It can be labeled as unhealthy
@@ -95,6 +97,7 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 }
 
 type conn struct {
+	name string
 	balancer.SubConn
 	address resolver.Address
 }
