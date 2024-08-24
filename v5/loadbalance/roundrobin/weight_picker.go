@@ -33,6 +33,7 @@ func (b *WeightPickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 			currentWeight:   weight,
 			efficientWeight: weight,
 			address:         conInfo.Address,
+			name:            conInfo.Address.Addr,
 		})
 	}
 	filter := b.Filter
@@ -129,6 +130,7 @@ func (p *WeightPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error)
 }
 
 type weightConn struct {
+	name string
 	// Initial weight
 	weight uint32
 	// Current weight
