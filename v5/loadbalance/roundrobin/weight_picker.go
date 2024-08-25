@@ -78,7 +78,7 @@ func (p *WeightPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error)
 	maxWeightConn.mutex.Unlock()
 	//p.mutex.Unlock()
 	return balancer.PickResult{
-		SubConn: maxWeightConn.SubConn,
+		SubConn: maxWeightConn,
 		Done: func(info balancer.DoneInfo) {
 			//for {
 			//	// 这里就是一个棘手的地方了
