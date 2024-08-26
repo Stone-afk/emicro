@@ -58,17 +58,32 @@ func (p *WeightPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error)
 	if len(p.connections) == 0 {
 		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 	}
-	candidates := make([]*weightConn, 0, len(p.connections))
-	for _, c := range p.connections {
-		if !p.filter(info, c.address) {
+	var totalWeight uint32
+	for _, con := range p.connections {
+		if !p.filter(info, con.address) {
 			continue
 		}
-		candidates = append(candidates, c)
+		totalWeight += con.weight
 	}
-	index := rand.Intn(len(candidates))
-	return balancer.PickResult{
-		SubConn: candidates[index].SubConn,
-	}, nil
+	val := rand.Intn(int(totalWeight) + 1)
+	for _, con := range p.connections {
+		if !p.filter(info, con.address) {
+			continue
+		}
+		val = val - int(con.weight)
+		if val <= 0 {
+			return balancer.PickResult{
+				SubConn: con,
+				Done: func(info balancer.DoneInfo) {
+					// 可以在这里修改权重，但是要考虑并发安全
+					//In fact, here we can also consider adjusting the weight according to the call result,
+					//Similar to that in roubin
+				},
+			}, nil
+		}
+	}
+	// In fact, it is impossible to run here, because we must be able to find a value before
+	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 }
 
 type weightConn struct {

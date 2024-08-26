@@ -54,11 +54,11 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 	}
 	candidates := make([]*conn, 0, len(p.connections))
-	for _, c := range p.connections {
-		if !p.filter(info, c.address) {
+	for _, con := range p.connections {
+		if !p.filter(info, con.address) {
 			continue
 		}
-		candidates = append(candidates, c)
+		candidates = append(candidates, con)
 	}
 	index := rand.Intn(len(candidates))
 	return balancer.PickResult{
