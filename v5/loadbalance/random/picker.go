@@ -20,9 +20,9 @@ type PickerBuilder struct {
 }
 
 func (b *PickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
-	connections := make([]conn, 0, len(info.ReadySCs))
+	connections := make([]*conn, 0, len(info.ReadySCs))
 	for con, conInfo := range info.ReadySCs {
-		connections = append(connections, conn{
+		connections = append(connections, &conn{
 			SubConn: con,
 			address: conInfo.Address,
 		})
@@ -45,7 +45,7 @@ func (b *PickerBuilder) Name() string {
 
 type Picker struct {
 	length      int
-	connections []conn
+	connections []*conn
 	filter      loadbalance.Filter
 }
 
@@ -53,7 +53,7 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	if len(p.connections) == 0 {
 		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 	}
-	candidates := make([]conn, 0, len(p.connections))
+	candidates := make([]*conn, 0, len(p.connections))
 	for _, c := range p.connections {
 		if !p.filter(info, c.address) {
 			continue
@@ -62,7 +62,7 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	}
 	index := rand.Intn(len(candidates))
 	return balancer.PickResult{
-		SubConn: candidates[index].SubConn,
+		SubConn: candidates[index],
 	}, nil
 }
 

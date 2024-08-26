@@ -48,6 +48,10 @@ func (b *WeightPickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 	}
 }
 
+func (b *WeightPickerBuilder) Name() string {
+	return WeightRoundRobin
+}
+
 type WeightPicker struct {
 	connections []*weightConn
 	mutex       sync.Mutex
