@@ -61,11 +61,11 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	candidates := make([]balancer.SubConn, 0, len(p.connections))
-	for _, c := range p.connections {
-		if !p.filter(info, c.(conn).address) {
+	for _, con := range p.connections {
+		if !p.filter(info, con.(conn).address) {
 			continue
 		}
-		candidates = append(candidates, c)
+		candidates = append(candidates, con)
 	}
 	if len(candidates) == 0 {
 		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
