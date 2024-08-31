@@ -12,46 +12,46 @@ func TestPicker_Pick(t *testing.T) {
 		name            string
 		p               *Picker
 		wantErr         error
-		wantSubConn     conn
+		wantSubConn     *conn
 		wantPickerIndex uint64
 	}{
 		{
 			name: "start",
 			p: &Picker{
 				cnt: 0,
-				connections: []balancer.SubConn{
-					conn{address: resolver.Address{Addr: "127.0.0.1:8080"}},
-					conn{address: resolver.Address{Addr: "127.0.0.1:8081"}},
+				connections: []*conn{
+					{address: resolver.Address{Addr: "127.0.0.1:8080"}},
+					{address: resolver.Address{Addr: "127.0.0.1:8081"}},
 				},
 				filter: func(info balancer.PickInfo, address resolver.Address) bool {
 					return true
 				},
 			},
 
-			wantSubConn:     conn{address: resolver.Address{Addr: "127.0.0.1:8080"}},
+			wantSubConn:     &conn{address: resolver.Address{Addr: "127.0.0.1:8080"}},
 			wantPickerIndex: 0,
 		},
 		{
 			name: "end",
 			p: &Picker{
 				cnt: 1,
-				connections: []balancer.SubConn{
-					conn{address: resolver.Address{Addr: "127.0.0.1:8080"}},
-					conn{address: resolver.Address{Addr: "127.0.0.1:8081"}},
+				connections: []*conn{
+					{address: resolver.Address{Addr: "127.0.0.1:8080"}},
+					{address: resolver.Address{Addr: "127.0.0.1:8081"}},
 				},
 				filter: func(info balancer.PickInfo, address resolver.Address) bool {
 					return true
 				},
 			},
 
-			wantSubConn:     conn{address: resolver.Address{Addr: "127.0.0.1:8081"}},
+			wantSubConn:     &conn{address: resolver.Address{Addr: "127.0.0.1:8081"}},
 			wantPickerIndex: 1,
 		},
 		{
 			name: "no connections",
 			p: &Picker{
 				cnt:         0,
-				connections: []balancer.SubConn{},
+				connections: []*conn{},
 				filter: func(info balancer.PickInfo, address resolver.Address) bool {
 					return true
 				},

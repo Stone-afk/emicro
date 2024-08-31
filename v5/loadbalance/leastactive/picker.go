@@ -4,6 +4,10 @@ import (
 	"emicro/v5/loadbalance"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
+	"google.golang.org/grpc/resolver"
+	"math"
+	"sync"
+	"sync/atomic"
 )
 
 const LeastActive = "LEAST_ACTIVE"
@@ -18,17 +22,69 @@ type PickerBuilder struct {
 }
 
 func (b *PickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
-	//TODO implement me
-	panic("implement me")
+	connections := make([]*conn, 0, len(info.ReadySCs))
+	for con, val := range info.ReadySCs {
+		connections = append(connections, &conn{
+			SubConn: con,
+			address: val.Address,
+		})
+	}
+	filter := b.Filter
+	if filter == nil {
+		filter = func(info balancer.PickInfo, address resolver.Address) bool {
+			return true
+		}
+	}
+	return &Picker{
+		connections: connections,
+		filter:      filter,
+	}
 }
 
 func (b *PickerBuilder) Name() string {
 	return LeastActive
 }
 
-type Picker struct{}
+type Picker struct {
+	cnt         uint64
+	mutex       sync.Mutex
+	filter      loadbalance.Filter
+	connections []*conn
+}
 
 func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	//TODO implement me
-	panic("implement me")
+	if len(p.connections) == 0 {
+		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
+	}
+	// The disadvantage of using atomic operations is that they are not accurate enough
+	// If the lock is used instead, the performance is too poor
+	// Think about why?
+	//p.mutex.Lock()
+	//defer p.mutex.Unlock()
+	var leastActive uint32 = math.MaxUint32
+	var res *conn
+	for _, con := range p.connections {
+		if !p.filter(info, con.address) {
+			continue
+		}
+		active := atomic.LoadUint32(&con.active)
+		if active < leastActive {
+			leastActive = active
+			res = con
+		}
+	}
+	atomic.AddUint32(&res.active, 1)
+	return balancer.PickResult{
+		SubConn: res,
+		Done: func(info balancer.DoneInfo) {
+			atomic.AddUint32(&res.active, -1)
+		},
+	}, nil
+}
+
+type conn struct {
+	name   string
+	active uint32
+	balancer.SubConn
+	address resolver.Address
 }

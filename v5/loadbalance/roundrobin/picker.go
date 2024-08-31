@@ -20,9 +20,9 @@ type PickerBuilder struct {
 }
 
 func (b *PickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
-	connections := make([]balancer.SubConn, 0, len(info.ReadySCs))
+	connections := make([]*conn, 0, len(info.ReadySCs))
 	for con, conInfo := range info.ReadySCs {
-		connections = append(connections, conn{
+		connections = append(connections, &conn{
 			SubConn: con,
 			address: conInfo.Address,
 			name:    conInfo.Address.Addr,
@@ -46,7 +46,7 @@ func (b *PickerBuilder) Name() string {
 
 type Picker struct {
 	cnt         uint64
-	connections []balancer.SubConn
+	connections []*conn
 	mutex       sync.Mutex
 	filter      loadbalance.Filter
 }
@@ -62,7 +62,7 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	defer p.mutex.Unlock()
 	candidates := make([]balancer.SubConn, 0, len(p.connections))
 	for _, con := range p.connections {
-		if !p.filter(info, con.(conn).address) {
+		if !p.filter(info, con.address) {
 			continue
 		}
 		candidates = append(candidates, con)
