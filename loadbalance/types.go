@@ -15,3 +15,18 @@ func GroupFilter(info balancer.PickInfo, address resolver.Address) bool {
 	}
 	return group == address.Attributes.Value("group")
 }
+
+type GroupFilterBuilder struct{}
+
+func (g GroupFilterBuilder) Build() Filter {
+	return func(info balancer.PickInfo, addr resolver.Address) bool {
+		input := info.Ctx.Value("group")
+		if input == nil {
+			// There are no groups here, but all groups can be used
+			return true
+		}
+		input, _ = input.(string)
+		target, _ := addr.Attributes.Value("group").(string)
+		return target == input
+	}
+}
