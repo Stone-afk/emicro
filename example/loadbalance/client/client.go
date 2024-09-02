@@ -32,6 +32,9 @@ func main() {
 		emicro.ClientWithPickerBuilder(pickerBuilder.Name(), pickerBuilder))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	ctx = context.WithValue(ctx, "group", "A")
+	// 压力测试
+	// ctx = context.WithValue(ctx, "group", "stress")
 	// 设置初始化连接的 ctx
 	conn, err := client.Dial(ctx, "user-service")
 	cancel()

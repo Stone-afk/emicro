@@ -5,6 +5,8 @@ import (
 	"emicro/v5/registry"
 	"fmt"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/base"
 	"time"
 )
 
@@ -15,6 +17,14 @@ type ClientOption func(client *Client)
 //		client.rb = NewResolverBuilder(r, timeout)
 //	}
 //}
+
+func ClientWithPickerBuilder(name string, pickerBuilder base.PickerBuilder) ClientOption {
+	return func(client *Client) {
+		builder := base.NewBalancerBuilder(name, pickerBuilder, base.Config{HealthCheck: true})
+		balancer.Register(builder)
+		client.balancerBuilder = builder
+	}
+}
 
 func ClientWithRegistry(r registry.Registry, timeout time.Duration) ClientOption {
 	return func(c *Client) {
@@ -34,6 +44,7 @@ type Client struct {
 	//rb       resolver.Builder
 	registry        registry.Registry
 	registryTimeout time.Duration
+	balancerBuilder balancer.Builder
 }
 
 func NewClient(opts ...ClientOption) *Client {
