@@ -73,6 +73,10 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 			res = con
 		}
 	}
+	if res == nil {
+		// 你也可以考虑筛选完之后，没有任何符合条件的节点，就用默认节点
+		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
+	}
 	atomic.AddUint32(&res.active, 1)
 	return balancer.PickResult{
 		SubConn: res,

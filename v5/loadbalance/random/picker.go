@@ -60,6 +60,10 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		}
 		candidates = append(candidates, con)
 	}
+	if len(candidates) == 0 {
+		// 你也可以考虑筛选完之后，没有任何符合条件的节点，就用默认节点
+		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
+	}
 	index := rand.Intn(len(candidates))
 	return balancer.PickResult{
 		SubConn: candidates[index],
