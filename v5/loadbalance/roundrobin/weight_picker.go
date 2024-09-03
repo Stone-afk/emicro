@@ -77,6 +77,9 @@ func (p *WeightPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error)
 		}
 		con.mutex.Unlock()
 	}
+	if maxWeightConn == nil {
+		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
+	}
 	maxWeightConn.mutex.Lock()
 	maxWeightConn.currentWeight -= totalWeight
 	maxWeightConn.mutex.Unlock()
