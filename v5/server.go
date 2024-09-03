@@ -28,6 +28,12 @@ func ServerWithRegistry(r registry.Registry) ServerOption {
 	}
 }
 
+func ServerWithTimeout(timeout time.Duration) ServerOption {
+	return func(server *Server) {
+		server.registerTimeout = timeout
+	}
+}
+
 type Server struct {
 	name   string
 	weight uint32
@@ -91,7 +97,7 @@ func (s *Server) Close() error {
 	//return s.listener.Close()
 }
 
-func NewServer(name string, opts ...ServerOption) (*Server, error) {
+func NewServer(name string, opts ...ServerOption) *Server {
 	res := &Server{
 		name:            name,
 		Server:          grpc.NewServer(),
@@ -100,5 +106,5 @@ func NewServer(name string, opts ...ServerOption) (*Server, error) {
 	for _, opt := range opts {
 		opt(res)
 	}
-	return res, nil
+	return res
 }
