@@ -163,6 +163,14 @@ func (s *Server) RegisterService(service Service) error {
 	return nil
 }
 
+// MustRegister -> panic error
+func (s *Server) MustRegister(service Service) {
+	err := s.RegisterService(service)
+	if err != nil {
+		panic(err)
+	}
+}
+
 // RegisterSerializer -> register serializer
 func (s *Server) RegisterSerializer(serializer serialize.Serializer) {
 	s.serializers[serializer.Code()] = serializer
