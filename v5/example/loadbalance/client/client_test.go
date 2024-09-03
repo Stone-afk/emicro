@@ -1,4 +1,4 @@
-package main
+package client
 
 import (
 	"context"
@@ -8,22 +8,19 @@ import (
 	"emicro/v5/loadbalance/roundrobin"
 	"emicro/v5/registry/etcd"
 	"encoding/json"
-	"fmt"
+	"github.com/stretchr/testify/require"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"testing"
 	"time"
 )
 
-func main() {
+func TestClient(t *testing.T) {
 	etcdClient, err := clientv3.New(clientv3.Config{
 		Endpoints: []string{"localhost:2379"},
 	})
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	r, err := etcd.NewRegistry(etcdClient)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	pickerBuilder := &roundrobin.WeightPickerBuilder{
 		Filter: loadbalance.NewGroupFilterBuilder().Build(),
 	}
@@ -38,9 +35,7 @@ func main() {
 	// 设置初始化连接的 ctx
 	conn, err := client.Dial(ctx, "user-service")
 	cancel()
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	userClient := gen.NewUserServiceClient(conn)
 	for i := 0; i < 10; i++ {
 		ctx, cancel = context.WithTimeout(context.Background(), time.Second*3)
@@ -48,13 +43,9 @@ func main() {
 			Id: 12,
 		})
 		cancel()
-		if err != nil {
-			panic(err)
-		}
+		require.NoError(t, err)
 		bs, err := json.Marshal(resp.User)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println(string(bs))
+		require.NoError(t, err)
+		t.Log(string(bs))
 	}
 }
