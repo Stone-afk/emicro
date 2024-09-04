@@ -33,7 +33,7 @@ func ClientWithRegistry(r registry.Registry, timeout time.Duration) ClientOption
 	}
 }
 
-func ClientInsecure() ClientOption {
+func ClientWithInsecure() ClientOption {
 	return func(c *Client) {
 		c.insecure = true
 	}
