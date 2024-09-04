@@ -25,7 +25,7 @@ func NewClusterBuilder(r registry.Registry, service string, dialOptions ...grpc.
 	}
 }
 
-func (b ClusterBuilder) BuildUnaryClientInterceptor() grpc.UnaryClientInterceptor {
+func (b *ClusterBuilder) BuildUnaryClientInterceptor() grpc.UnaryClientInterceptor {
 	// method: users.UserService/GetByID
 	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		if !isBroadCast(ctx) {
