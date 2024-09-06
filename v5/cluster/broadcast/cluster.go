@@ -43,12 +43,13 @@ func (b *ClusterBuilder) BuildUnaryClientInterceptor() grpc.UnaryClientIntercept
 				// 可怕的是我们每次进来都需要重新连，除非我们考虑缓存的问题
 				// 缓存的问题则在于，我们需要管理它，在必要的时候关掉 conn
 				//conn, er := grpc.DialContext(context.Background(), fmt.Sprintf("registry:///%s", b.service), b.dialOptions...)
-				conn, er := grpc.Dial(in.Address, b.dialOptions...)
+				insCC, er := grpc.Dial(in.Address, b.dialOptions...)
 				if er != nil {
 					return er
 				}
 				// 这里你可以考虑设计接口，允许用户把所有广播响应都拿到
-				return conn.Invoke(ctx, method, req, reply, opts...)
+				//return insCC.Invoke(ctx, method, req, reply, opts...)
+				return invoker(ctx, method, req, reply, insCC, opts...)
 			})
 		}
 		// 这种做法
