@@ -1,4 +1,4 @@
-package broadcastall
+package fastest
 
 import (
 	"context"
@@ -48,9 +48,8 @@ func TestUseBroadCast(t *testing.T) {
 	require.NoError(t, err)
 	ctx, respChan := UsingBroadCast(ctx)
 	go func() {
-		for res := range respChan {
-			fmt.Println(res.Err, res.Val)
-		}
+		res := <-respChan
+		fmt.Println(res.Err, res.Val)
 	}()
 	bd := NewClusterBuilder(r, "user-service", grpc.WithInsecure())
 	cc, err := client.Dial(ctx, "user-service", grpc.WithUnaryInterceptor(bd.BuildUnaryClientInterceptor()))
