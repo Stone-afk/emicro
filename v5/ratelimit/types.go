@@ -7,7 +7,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type Limiter interface {
+type ServerLimiter interface {
 	LimitUnary() grpc.UnaryServerInterceptor
 }
 

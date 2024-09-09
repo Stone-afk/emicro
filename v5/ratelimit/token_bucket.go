@@ -2,6 +2,7 @@ package ratelimit
 
 import (
 	"context"
+	"errors"
 	"google.golang.org/grpc"
 	"time"
 )
@@ -99,7 +100,26 @@ func NewTokenBucketLimiter(buffer int, interval time.Duration) *TokenBucketLimit
 
 func (l *TokenBucketLimiter) LimitUnary() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-		panic("")
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-l.close:
+			// 已经关闭了
+			// 这里你可以决策，如果认为限流器被关了，就代表不用限流，那么就直接发起调用。
+			// 这种情况下，还要考虑提供 Start 方法重启限流器
+			// 我这里采用另外一种语义，就是我认为限流器被关了，其实代表的是整个应用关了，所以我这里退出
+			return nil, errors.New("emicro: 系统未被保护")
+		case _, ok := <-l.tokens:
+			if ok {
+				return handler(ctx, req)
+			}
+		default:
+			// 拿不到令牌就直接限流拒绝
+		}
+		// 熔断限流降级之间区别在这里了
+		// 1. 返回默认值 get_user -> GetUserResp
+		// 2. 打个标记位，后面执行快路径，或者兜底路径
+		return nil, errors.New("emicro: 被限流了")
 	}
 }
 
