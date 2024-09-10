@@ -8,7 +8,7 @@ import (
 )
 
 type ServerLimiter interface {
-	LimitUnary() grpc.UnaryServerInterceptor
+	BuildServerInterceptor() grpc.UnaryServerInterceptor
 }
 
 type Guardian interface {
