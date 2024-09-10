@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+var _ ServerLimiter = (*TokenBucketLimiter)(nil)
+
 // TokenBucketLimiter 基于令牌桶的限流
 // 大多数时候我们不需要自己手写算法，直接使用
 // golang.org/x/time/rate
@@ -98,7 +100,7 @@ func NewTokenBucketLimiter(buffer int, interval time.Duration) *TokenBucketLimit
 //	}
 //}
 
-func (l *TokenBucketLimiter) LimitUnary() grpc.UnaryServerInterceptor {
+func (l *TokenBucketLimiter) BuildServerInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 		select {
 		case <-ctx.Done():
