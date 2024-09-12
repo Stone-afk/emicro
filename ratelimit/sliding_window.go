@@ -59,7 +59,7 @@ func (t *SlidingWindowLimiter) LimitUnary() grpc.UnaryServerInterceptor {
 		}
 
 		cnt = t.queue.Len()
-		if cnt < t.maxRate {
+		if cnt > t.maxRate {
 			t.mutex.Unlock()
 			return t.onReject(ctx, req, info, handler)
 		}
