@@ -65,7 +65,7 @@ func (l *SlideWindowLimiter) OnReject(onReject rejectStrategy) *SlideWindowLimit
 	return l
 }
 
-func NewSlidingWindowLimiter(rate int, interval time.Duration) *SlideWindowLimiter {
+func NewSlideWindowLimiter(rate int, interval time.Duration) *SlideWindowLimiter {
 	return &SlideWindowLimiter{
 		maxRate:  rate,
 		interval: interval,
