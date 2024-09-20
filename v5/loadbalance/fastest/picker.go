@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"log"
 	"net/http"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -44,10 +45,29 @@ func (b *PickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 			return true
 		}
 	}
-	return &Picker{
+	res := &Picker{
 		connections: connections,
 		filter:      filter,
 	}
+	// 这里有一个很大的问题，就是我们这里不好怎么退出，因为 gRPC 不会调用 Close 方法
+	// 可以考虑使用 runtime.SetFinalizer 来在 res 被回收的时候得到通知
+	ch := make(chan struct{}, 1)
+	runtime.SetFinalizer(res, func() {
+		ch <- struct{}{}
+	})
+	go func() {
+		ticker := time.NewTicker(b.Interval)
+		for {
+			select {
+			case <-ticker.C:
+				// 这里很难容错，即如果刷新响应时间失败该怎么办
+				res.updateRespTime(b.Endpoint, b.Query)
+			case <-ch:
+				return
+			}
+		}
+	}()
+	return res
 }
 
 func (b *PickerBuilder) Name() string {

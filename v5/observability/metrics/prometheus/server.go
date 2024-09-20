@@ -5,6 +5,8 @@ import (
 	"emicro/v5/observability"
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/status"
+	"strings"
 	"time"
 )
 
@@ -71,13 +73,32 @@ func (b *ServerInterceptorBuilder) BuildUnaryServerInterceptor() grpc.UnaryServe
 		startTime := time.Now()
 		// 类似于 opentelemetry，这里也可以记录一下业务ID之类的信息
 		defer func() {
+			s, m := b.splitMethodName(info.FullMethod)
 			if err != nil {
-				errCntVec.WithLabelValues(info.FullMethod).Add(1)
+				//errCntVec.WithLabelValues(info.FullMethod).Add(1)
+				errCntVec.WithLabelValues("server unary", s, m).Add(1)
 			}
-			duration := time.Now().Sub(startTime)
+			duration := float64(time.Now().Sub(startTime).Milliseconds())
 			reqCnt.Sub(1)
-			summaryVec.WithLabelValues(info.FullMethod).Observe(float64(duration.Milliseconds()))
+			if err == nil {
+				summaryVec.WithLabelValues("server unary", s, m, "OK").Observe(duration)
+			} else {
+				st, _ := status.FromError(err)
+				summaryVec.WithLabelValues("server unary", s, m, st.Code().String()).Observe(duration)
+			}
+			//summaryVec.WithLabelValues(info.FullMethod).Observe(float64(duration.Milliseconds()))
 		}()
-		return handler(ctx, req)
+		resp, err = handler(ctx, req)
+		return
 	}
+}
+
+func (b *ServerInterceptorBuilder) splitMethodName(fullMethodName string) (string, string) {
+	// /UserService/GetByID
+	// /user.v1.UserService/GetByID
+	fullMethodName = strings.TrimPrefix(fullMethodName, "/") // remove leading slash
+	if i := strings.Index(fullMethodName, "/"); i >= 0 {
+		return fullMethodName[:i], fullMethodName[i+1:]
+	}
+	return "unknown", "unknown"
 }
