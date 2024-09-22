@@ -144,6 +144,7 @@ type weightConn struct {
 	currentWeight uint32
 	// Effective weight, we will dynamically adjust the weight in the whole process
 	efficientWeight uint32
+	available       bool
 	balancer.SubConn
 	mutex   sync.Mutex
 	address resolver.Address
