@@ -120,6 +120,7 @@ func (p *WeightPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error)
 			//	}
 			//}
 			maxWeightConn.mutex.Lock()
+			defer maxWeightConn.mutex.Unlock()
 			if info.Err != nil && maxWeightConn.weight == 0 {
 				return
 			}
@@ -131,7 +132,6 @@ func (p *WeightPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error)
 			} else {
 				maxWeightConn.efficientWeight++
 			}
-			maxWeightConn.mutex.Unlock()
 		},
 	}, nil
 }
