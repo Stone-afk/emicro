@@ -24,7 +24,7 @@ func TestClient(t *testing.T) {
 	pickerBuilder := &roundrobin.WeightPickerBuilder{
 		Filter: loadbalance.NewGroupFilterBuilder().Build(),
 	}
-	client := v5.NewClient(v5.ClientInsecure(),
+	client := v5.NewClient(v5.ClientWithInsecure(),
 		v5.ClientWithRegistry(r, time.Second*3),
 		v5.ClientWithPickerBuilder(pickerBuilder.Name(), pickerBuilder))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
