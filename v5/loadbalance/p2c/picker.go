@@ -2,7 +2,9 @@ package p2c
 
 import (
 	"emicro/internal/utils/xsync"
+	"emicro/v5/loadbalance"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/resolver"
 	"math"
 	"math/rand"
@@ -29,16 +31,49 @@ const (
 	logInterval = time.Minute
 )
 
-var emptyPickResult balancer.PickResult
+var (
+	_               balancer.Picker    = (*Picker)(nil)
+	_               base.PickerBuilder = (*PickerBuilder)(nil)
+	emptyPickResult balancer.PickResult
+)
 
-type PickerBuilder struct{}
+type PickerBuilder struct {
+	Filter loadbalance.Filter
+}
+
+func (b *PickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
+	connections := make([]*Conn, 0, len(info.ReadySCs))
+	for con, conInfo := range info.ReadySCs {
+		connections = append(connections, &Conn{
+			SubConn: con,
+			address: conInfo.Address,
+			name:    conInfo.Address.Addr,
+		})
+	}
+	filter := b.Filter
+	if filter == nil {
+		filter = func(info balancer.PickInfo, address resolver.Address) bool {
+			return true
+		}
+	}
+	return &Picker{
+		connections: connections,
+		filter:      filter,
+	}
+}
 
 type Picker struct {
-	conns   []*Conn
-	r       *rand.Rand
-	lock    sync.Mutex
-	stamp   *xsync.AtomicDuration
-	logFunc func(info string, args ...any)
+	connections []*Conn
+	r           *rand.Rand
+	lock        sync.Mutex
+	stamp       *xsync.AtomicDuration
+	logFunc     func(info string, args ...any)
+	filter      loadbalance.Filter
+}
+
+func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 type Conn struct {
@@ -57,6 +92,7 @@ type Conn struct {
 	last int64
 	// last selected time point
 	pick int64
+	name string
 }
 
 func (c *Conn) healthy() bool {

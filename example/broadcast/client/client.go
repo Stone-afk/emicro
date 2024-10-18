@@ -11,7 +11,6 @@ import (
 	"fmt"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer/base"
 	"log"
 	"time"
 )
@@ -32,8 +31,8 @@ func main() {
 	pickerBuilder := &roundrobin.PickerBuilder{
 		Filter: loadbalance.GroupFilter,
 	}
-	builder := base.NewBalancerBuilder(pickerBuilder.Name(), pickerBuilder, base.Config{HealthCheck: true})
-	loadbalance.Register(builder)
+	//builder := base.NewBalancerBuilder(pickerBuilder.Name(), pickerBuilder, base.Config{HealthCheck: true})
+	//loadbalance.Register(builder)
 
 	cb := broadcast.NewClusterBuilder(r, "user-service")
 	cc, err := grpc.Dial("registry:///user-service",
