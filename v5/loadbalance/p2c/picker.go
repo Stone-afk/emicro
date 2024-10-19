@@ -13,20 +13,20 @@ import (
 	"time"
 )
 
-// This package is a client load loadbalance. The algorithm used is p2c+ewma
-// P2c is either
-// Ewma index moving weighted average (reflecting the average value over a period of time)
+// 该包是一个客户端负载均衡器。使用的算法是 p2c+ewma；
+// p2c 是二选一算法（power of two choices）
+// ewma 是指数移动加权平均（反映一段时间内的平均值）；
 
 const (
-	// Name is the name of p2c loadbalance.
+	// Name 是 p2c 负载均衡算法的名称
 	Name            = "p2c_ewma"
 	initSuccess     = 1000
 	throttleSuccess = initSuccess / 2
-	// if statistic not collected,we add a big lag penalty to endpoint
+	// 如果未收集到统计数据，我们会对该端点添加一个较大的延迟惩罚
 	penalty   = int64(math.MaxInt32)
 	forcePick = int64(time.Second)
 	pickTimes = 3
-	// default value from finagle
+	// 默认值来自 Finagle
 	decayTime   = int64(time.Second * 10)
 	logInterval = time.Minute
 )
@@ -46,6 +46,7 @@ func (b *PickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 	for con, conInfo := range info.ReadySCs {
 		connections = append(connections, &Conn{
 			SubConn: con,
+			success: initSuccess,
 			address: conInfo.Address,
 			name:    conInfo.Address.Addr,
 		})
@@ -57,8 +58,10 @@ func (b *PickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 		}
 	}
 	return &Picker{
-		connections: connections,
 		filter:      filter,
+		connections: connections,
+		stamp:       xsync.NewAtomicDuration(),
+		r:           rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
@@ -79,19 +82,20 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 type Conn struct {
 	balancer.SubConn
 	address resolver.Address
-	// client statistic data
-	// average call delay (used to save ewma value)
+	// 客户端统计数据
+	// 平均调用延迟（用于保存 ewma 值）
 	latency uint64
-	// request success number
+	// 请求成功数
 	success uint64
-	// the number of requests currently being processed by the node
+	// 节点当前正在处理的请求数
 	inflight int64
-	// total number of requests
+	// 请求总数
 	requests int64
-	// last request completion time, used to calculate ewma value
+	// 上次请求完成时间，用于计算ewma值
 	last int64
-	// last selected time point
+	// 上次选择的时间点
 	pick int64
+	// 节点名称
 	name string
 }
 
@@ -99,11 +103,11 @@ func (c *Conn) healthy() bool {
 	return atomic.LoadUint64(&c.success) > throttleSuccess
 }
 
-// load() calculates the load of the node
-// The formula for calculating the load is: load = Sqrt(ewma) * inflight;
-// Here's a simple explanation: ewma is equivalent to the average request time,
-// and inflight is the number of requests being processed by the current node,
-// which is roughly calculated by multiplying the network load of the current node
+// load() 计算节点的负载
+// 负载计算公式为：load = Sqrt(ewma) * inflight；
+// 简单解释：ewma 相当于平均请求时间，
+// inflight 是当前节点正在处理的请求数量，
+// 这个数量大致通过乘以当前节点的网络负载来计算。
 func (c *Conn) load() int64 {
 	// Add 1 to avoid zero
 	latency := int64(math.Sqrt(float64(atomic.LoadUint64(&c.latency) + 1)))
