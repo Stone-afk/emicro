@@ -84,6 +84,36 @@ type Picker struct {
 }
 
 func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	var chosen *Conn
+	switch len(p.connections) {
+	case 0:
+		return emptyPickResult, balancer.ErrNoSubConnAvailable
+	case 1:
+		chosen = p.choose(p.connections[0], nil)
+	case 2:
+		chosen = p.choose(p.connections[0], p.connections[1])
+	default:
+
+	}
+	return balancer.PickResult{
+		SubConn: chosen.SubConn,
+		Done:    p.buildCallback(chosen),
+	}, nil
+}
+
+func (p *Picker) choose(c1, c2 *Conn) *Conn {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *Picker) buildCallback(c *Conn) func(info balancer.DoneInfo) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *Picker) logStats() {
 	//TODO implement me
 	panic("implement me")
 }
