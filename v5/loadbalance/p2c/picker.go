@@ -70,6 +70,10 @@ func (b *PickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 	}
 }
 
+func (b *PickerBuilder) Name() string {
+	return Name
+}
+
 type Picker struct {
 	connections []*Conn
 	r           *rand.Rand
