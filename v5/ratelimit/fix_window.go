@@ -43,7 +43,7 @@ func (l *FixWindowLimiter) BuildServerInterceptor() grpc.UnaryServerInterceptor 
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 		current := int64(time.Now().Nanosecond())
 		windowStart := atomic.LoadInt64(&l.latestWindowStartTimestamp)
-		cnt := atomic.LoadInt64(&l.cnt)
+		//cnt := atomic.LoadInt64(&l.cnt)
 		// 如果要是最近窗口的起始时间 + 窗口大小 < 当前时间戳
 		// 说明换窗口了
 		if windowStart+l.interval < current {
@@ -57,7 +57,7 @@ func (l *FixWindowLimiter) BuildServerInterceptor() grpc.UnaryServerInterceptor 
 		}
 		// 检查这个窗口还能不能处理新请求
 		// 先取号
-		cnt = atomic.AddInt64(&l.cnt, 1)
+		cnt := atomic.AddInt64(&l.cnt, 1)
 		// 超过上限了
 		if cnt > l.maxRate {
 			return l.onReject(ctx, req, info, handler)
