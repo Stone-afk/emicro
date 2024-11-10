@@ -95,7 +95,20 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	case 2:
 		chosen = p.choose(p.connections[0], p.connections[1])
 	default:
-
+		var node1, node2 *Conn
+		for i := 0; i < pickTimes; i++ {
+			idx1 := p.r.Intn(len(p.connections))
+			idx2 := p.r.Intn(len(p.connections) - 1)
+			if idx2 >= idx1 {
+				idx2++
+			}
+			node1 = p.connections[idx1]
+			node2 = p.connections[idx2]
+			if node1.healthy() && node2.healthy() {
+				break
+			}
+		}
+		chosen = p.choose(node1, node2)
 	}
 	return balancer.PickResult{
 		SubConn: chosen.SubConn,
