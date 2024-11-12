@@ -2,6 +2,7 @@ package p2c
 
 import (
 	"emicro/internal/utils/xsync"
+	"emicro/internal/utils/xtime"
 	"emicro/v5/loadbalance"
 	"fmt"
 	"google.golang.org/grpc/balancer"
@@ -119,8 +120,24 @@ func (p *Picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 }
 
 func (p *Picker) choose(c1, c2 *Conn) *Conn {
-	//TODO implement me
-	panic("implement me")
+	start := int64(xtime.Now())
+	if c2 == nil {
+		atomic.StoreInt64(&c1.pick, start)
+		return c1
+	}
+	if c1.load() > c2.load() {
+		c1, c2 = c2, c1
+	}
+	// If the failed node has never been selected once during forceGap (forcePick), it is forced to be selected once
+	// Take advantage of forced opportunities to trigger updates of success rate and delay
+	// 如果失败的节点（负载更大的节点）在 forceGap（forcePick）期间从未被选中过，则强制选择一次
+	// 利用强制选择的机会触发成功率和延迟的更新
+	pick := atomic.LoadInt64(&c2.pick)
+	if start-pick > forcePick && atomic.CompareAndSwapInt64(&c2.pick, pick, start) {
+		return c2
+	}
+	atomic.StoreInt64(&c1.pick, start)
+	return c1
 }
 
 func (p *Picker) buildCallback(c *Conn) func(info balancer.DoneInfo) {
