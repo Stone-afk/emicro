@@ -3,11 +3,13 @@ package p2c
 import (
 	"emicro/internal/utils/xsync"
 	"emicro/v5/loadbalance"
+	"fmt"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/resolver"
 	"math"
 	"math/rand"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -127,8 +129,14 @@ func (p *Picker) buildCallback(c *Conn) func(info balancer.DoneInfo) {
 }
 
 func (p *Picker) logStats() {
-	//TODO implement me
-	panic("implement me")
+	var stats []string
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	for _, conn := range p.connections {
+		stats = append(stats, fmt.Sprintf("conn: %s, load: %d, reqs: %d",
+			conn.address.Addr, conn.load(), atomic.SwapInt64(&conn.requests, 0)))
+	}
+	p.logFunc("p2c - %s", strings.Join(stats, "; "))
 }
 
 type Conn struct {
