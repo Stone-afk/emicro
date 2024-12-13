@@ -2,8 +2,8 @@ package client
 
 import (
 	"context"
+	gen2 "emicro/example/proto/gen"
 	v5 "emicro/v5"
-	"emicro/v5/example/proto/gen"
 	"emicro/v5/loadbalance"
 	"emicro/v5/loadbalance/roundrobin"
 	"emicro/v5/registry/etcd"
@@ -36,10 +36,10 @@ func TestClient(t *testing.T) {
 	conn, err := client.Dial(ctx, "user-service")
 	cancel()
 	require.NoError(t, err)
-	userClient := gen.NewUserServiceClient(conn)
+	userClient := gen2.NewUserServiceClient(conn)
 	for i := 0; i < 10; i++ {
 		ctx, cancel = context.WithTimeout(context.Background(), time.Second*3)
-		resp, err := userClient.GetById(ctx, &gen.GetByIdReq{
+		resp, err := userClient.GetById(ctx, &gen2.GetByIdReq{
 			Id: 12,
 		})
 		cancel()

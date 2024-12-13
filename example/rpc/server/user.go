@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"emicro/example/proto/gen"
 	"errors"
 	"time"
 )
@@ -26,6 +27,22 @@ func (u *UserService) AlwaysError(ctx context.Context, req *FindByUserIdReq) (*F
 	return nil, errors.New("this is an error")
 }
 
-func (u *UserService) ServiceName() string {
+func (u *UserService) Name() string {
 	return "user"
+}
+
+// UserServiceProto 用来测试 protobuf 协议
+type UserServiceProto struct {
+}
+
+func (u *UserServiceProto) GetById(ctx context.Context, req *gen.GetByIdReq) (*gen.GetByIdResp, error) {
+	return &gen.GetByIdResp{
+		User: &gen.User{
+			Id: 123,
+		},
+	}, nil
+}
+
+func (u *UserServiceProto) Name() string {
+	return "user-service-proto"
 }

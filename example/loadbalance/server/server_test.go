@@ -1,8 +1,8 @@
 package server
 
 import (
+	"emicro/example/proto/gen"
 	v5 "emicro/v5"
-	"emicro/v5/example/proto/gen"
 	"emicro/v5/registry/etcd"
 	"fmt"
 	"github.com/stretchr/testify/require"

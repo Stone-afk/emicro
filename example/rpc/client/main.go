@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"emicro/example/rpc/proto/gen"
-	rpc "emicro/rpc"
+	"emicro/example/proto/gen"
+	"emicro/v5/rpc"
 	"encoding/json"
 	"fmt"
 )
@@ -24,7 +24,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
 	_, _ = us.GetById(rpc.CtxWithOneway(context.Background()), &FindByUserIdReq{
 		Id: 12,
 	})
@@ -62,7 +61,6 @@ func main() {
 
 	data, _ := json.Marshal(resp)
 	fmt.Printf("收到响应: %s \n", data)
-
 	_, err = us.AlwaysError(context.Background(), &FindByUserIdReq{
 		Id: 12,
 	})
@@ -86,7 +84,7 @@ type UserService struct {
 	AlwaysError func(ctx context.Context, req *FindByUserIdReq) (*FindByUserIdResp, error)
 }
 
-func (u *UserService) ServiceName() string {
+func (u *UserService) Name() string {
 	return "user"
 }
 
@@ -96,6 +94,6 @@ type UserServiceProto struct {
 	GetById func(ctx context.Context, req *gen.GetByIdReq) (*gen.GetByIdResp, error)
 }
 
-func (u *UserServiceProto) ServiceName() string {
+func (u *UserServiceProto) Name() string {
 	return "user-service-proto"
 }
