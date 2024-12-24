@@ -1,6 +1,7 @@
 package p2c
 
 import (
+	"emicro/internal/codes"
 	"emicro/internal/utils/xsync"
 	"emicro/internal/utils/xtime"
 	"emicro/v5/loadbalance"
@@ -141,8 +142,51 @@ func (p *Picker) choose(c1, c2 *Conn) *Conn {
 }
 
 func (p *Picker) buildCallback(c *Conn) func(info balancer.DoneInfo) {
-	//TODO implement me
-	panic("implement me")
+	// call time
+	start := int64(xtime.Now())
+	atomic.AddInt64(&c.inflight, 1)
+	atomic.AddInt64(&c.requests, 1)
+	return func(info balancer.DoneInfo) {
+		atomic.AddInt64(&c.inflight, -1)
+		// call completion time
+		now := xtime.Now()
+		// get the last completion time
+		last := atomic.SwapInt64(&c.last, int64(now))
+		// calculate time interval
+		td := int64(now) - last
+		if td < 0 {
+			td = 0
+		}
+		// get call delay
+		latency := int64(now) - start
+		if latency < 0 {
+			// request is completed without taking time, which is not reasonably possible
+			latency = 0
+		}
+		// get the last call delay and the time decay coefficient w
+		var w float64
+		oldLatency := atomic.LoadUint64(&c.latency)
+		if oldLatency != 0 {
+			// this calculation formula is the attenuation function model in Newton's law
+			w = math.Exp(float64(-td) / float64(decayTime))
+		}
+		// latest delay data calculated according to * EWMA (exponentially weighted moving average algorithm) *
+		atomic.StoreUint64(&c.latency, uint64(float64(oldLatency)*w+float64(latency)*(1-w)))
+		// the calculation logic of success is the same as above
+		success := initSuccess
+		if info.Err != nil && !codes.Acceptable(info.Err) {
+			success = 0
+		}
+		oldSuccess := atomic.LoadUint64(&c.success)
+		atomic.StoreUint64(&c.success, uint64(float64(oldSuccess)*w+float64(success)*(1-w)))
+
+		stamp := p.stamp.Load()
+		if now-stamp >= logInterval {
+			if p.stamp.CompareAndSwap(stamp, now) {
+				p.logStats()
+			}
+		}
+	}
 }
 
 func (p *Picker) logStats() {
