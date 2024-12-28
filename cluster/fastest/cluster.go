@@ -2,7 +2,7 @@ package fastest
 
 import (
 	"context"
-	"emicro/v5/registry"
+	"emicro/registry"
 	"google.golang.org/grpc"
 	"reflect"
 	"sync"

@@ -2,13 +2,13 @@ package rpc
 
 import (
 	"context"
-	"emicro/rpc/message"
+	message2 "emicro/rpc/message"
 )
 
 type Proxy interface {
-	Invoke(ctx context.Context, request *message.Request) (*message.Response, error)
+	Invoke(ctx context.Context, request *message2.Request) (*message2.Response, error)
 }
 
 type Service interface {
-	ServiceName() string
+	Name() string
 }

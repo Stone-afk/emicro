@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"emicro/example/proto/gen"
-	"emicro/v5/rpc"
+	rpc2 "emicro/rpc"
 	"encoding/json"
 	"fmt"
 )
 
 func main() {
-	c, err := rpc.NewClient("0.0.0.0:8081")
+	c, err := rpc2.NewClient("0.0.0.0:8081")
 	if err != nil {
 		panic(err)
 	}
@@ -24,7 +24,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	_, _ = us.GetById(rpc.CtxWithOneway(context.Background()), &FindByUserIdReq{
+	_, _ = us.GetById(rpc2.CtxWithOneway(context.Background()), &FindByUserIdReq{
 		Id: 12,
 	})
 

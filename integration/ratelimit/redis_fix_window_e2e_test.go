@@ -4,8 +4,8 @@ package ratelimit
 
 import (
 	"context"
-	"emicro/v5/proto/gen"
-	"emicro/v5/ratelimit"
+	"emicro/proto/gen"
+	"emicro/ratelimit"
 	"errors"
 	"github.com/go-redis/redis/v9"
 	"github.com/stretchr/testify/assert"

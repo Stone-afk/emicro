@@ -1,9 +1,9 @@
 package server
 
 import (
+	v5 "emicro"
 	"emicro/example/proto/gen"
-	v5 "emicro/v5"
-	"emicro/v5/registry/etcd"
+	"emicro/registry/etcd"
 	"fmt"
 	"github.com/stretchr/testify/require"
 	clientv3 "go.etcd.io/etcd/client/v3"

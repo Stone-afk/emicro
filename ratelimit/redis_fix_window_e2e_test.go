@@ -31,7 +31,7 @@ func TestFixWindowLimiter_LimitUnary(t *testing.T) {
 			// 初始化状态
 			name:     "init",
 			key:      "my-service",
-			rate:     1,
+			maxRate:  1,
 			interval: time.Minute,
 			before:   func(t *testing.T) {},
 			after: func(t *testing.T) {
@@ -46,7 +46,7 @@ func TestFixWindowLimiter_LimitUnary(t *testing.T) {
 			// 初始化状态，但是失败
 			name:      "init but limit",
 			key:       "my-service",
-			rate:      0,
+			maxRate:   0,
 			wantLimit: true,
 			interval:  time.Minute,
 			before:    func(t *testing.T) {},
@@ -59,7 +59,7 @@ func TestFixWindowLimiter_LimitUnary(t *testing.T) {
 			// 触发限流，但是失败
 			name:      "limit",
 			key:       "my-service",
-			rate:      5,
+			maxRate:   5,
 			wantLimit: true,
 			interval:  time.Minute,
 			before: func(t *testing.T) {
@@ -78,7 +78,7 @@ func TestFixWindowLimiter_LimitUnary(t *testing.T) {
 			// 窗口移动，未触发限流
 			name:     "window shift",
 			key:      "my-service",
-			rate:     5,
+			maxRate:  5,
 			interval: time.Minute,
 			before: func(t *testing.T) {
 				val, err := rdb.Set(context.Background(), "my-service", 5, time.Second).Result()

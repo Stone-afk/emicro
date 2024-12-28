@@ -4,9 +4,10 @@ import (
 	"context"
 	"emicro/internal/errs"
 	"emicro/rpc/compress"
-	"emicro/rpc/message"
+	message2 "emicro/rpc/message"
 	"emicro/rpc/serialize"
 	"emicro/rpc/serialize/json"
+	"emicro/rpc/tcp"
 	"fmt"
 	"io"
 	"net"
@@ -31,81 +32,6 @@ func (s *Server) Close() error {
 	return nil
 }
 
-// MustRegister -> panic error
-func (s *Server) MustRegister(service Service) {
-	err := s.RegisterService(service)
-	if err != nil {
-		panic(err)
-	}
-}
-
-// NewServer instance
-func NewServer() *Server {
-	res := &Server{
-		services: make(map[string]*reflectionStub, 8),
-		// A byte can have up to 256 implementations, which can be directly made into a simple bit array
-		// 一个字节，最多有 256 个实现，直接做成一个简单的 bit array 的东西
-		serializers: make([]serialize.Serializer, 256),
-
-		compressors: make([]compress.Compressor, 256),
-	}
-	// Register the most basic serialization protocol
-	res.RegisterSerializer(json.Serializer{})
-	res.RegisterCompressor(compress.DoNothingCompressor{})
-	return res
-}
-
-// RegisterService -> Service stub
-func (s *Server) RegisterService(service Service) error {
-	val := reflect.ValueOf(service)
-	typ := reflect.TypeOf(service)
-	methods := make(map[string]reflect.Value, val.NumMethod())
-	for i := 0; i < val.NumMethod(); i++ {
-		methodTyp := typ.Method(i)
-		methods[methodTyp.Name] = val.Method(i)
-	}
-	s.services[service.ServiceName()] = &reflectionStub{
-		s:           service,
-		methods:     methods,
-		serializers: s.serializers,
-		compressors: s.compressors,
-	}
-	return nil
-}
-
-// RegisterSerializer -> register serializer
-func (s *Server) RegisterSerializer(serializer serialize.Serializer) {
-	s.serializers[serializer.Code()] = serializer
-}
-
-// RegisterCompressor -> register compressor
-func (s *Server) RegisterCompressor(compressor compress.Compressor) {
-	s.compressors[compressor.Code()] = compressor
-}
-
-// Start -> run server
-func (s *Server) Start(address string) error {
-	listener, err := net.Listen("tcp", address)
-	if err != nil {
-		return err
-	}
-	s.listener = listener
-	for {
-		conn, err := listener.Accept()
-		// closed
-		if err == net.ErrClosed {
-
-			return nil
-		}
-		if err != nil {
-			// consider printing logs
-			fmt.Printf("server: accept connection got error: %v", err)
-			continue
-		}
-		go s.handleConn(conn)
-	}
-}
-
 //// Start -> run server
 //func (s *Server) Start(address string) error {
 //	listener, err := net.Listen("tcp", address)
@@ -128,17 +54,39 @@ func (s *Server) Start(address string) error {
 //	}
 //}
 
+// Start -> run server
+func (s *Server) Start(address string) error {
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		return err
+	}
+	s.listener = listener
+	for {
+		conn, err := listener.Accept()
+		// closed
+		if err == net.ErrClosed {
+			return nil
+		}
+		if err != nil {
+			// consider printing logs
+			fmt.Printf("server: accept connection got error: %v", err)
+			continue
+		}
+		go s.handleConn(conn)
+	}
+}
+
 // handleConn -> handle tcp connection
 func (s *Server) handleConn(conn net.Conn) {
 	for {
-		bs, err := ReadMsg(conn)
+		bs, err := tcp.ReadMsg(conn)
 		if err == io.EOF {
 			continue
 		}
 		if err != nil {
 			return
 		}
-		req := message.DecodeReq(bs)
+		req := message2.DecodeReq(bs)
 		ctx := context.Background()
 		deadline, err := strconv.ParseInt(req.Meta["deadline"], 10, 64)
 		cancel := func() {}
@@ -155,30 +103,82 @@ func (s *Server) handleConn(conn net.Conn) {
 			continue
 		}
 		// calculate and set the response head length
-		resp.SetHeadLength()
+		resp.CalculateHeaderLength()
 		// calculate and set the response body length
-		resp.SetBodyLength()
-		encode := message.EncodeResp(resp)
-		_, er := conn.Write(encode)
-		if er != nil {
-			fmt.Printf("server: sending response failed: %v", er)
+		resp.CalculateBodyLength()
+		encode := message2.EncodeResp(resp)
+		_, err = conn.Write(encode)
+		if err != nil {
+			fmt.Printf("server: sending response failed: %v", err)
 		}
 		cancel()
 	}
 }
 
 // Invoke -> server Invoke
-func (s *Server) Invoke(ctx context.Context, req *message.Request) *message.Response {
+func (s *Server) Invoke(ctx context.Context, req *message2.Request) *message2.Response {
 	stub, ok := s.services[req.ServiceName]
 	if !ok {
-		return &message.Response{
+		return &message2.Response{
 			Version:    req.Version,
 			Compresser: req.Compresser,
 			Serializer: req.Serializer,
 			MessageId:  req.MessageId,
-			Error:      []byte(errs.InvalidServiceName.Error())}
+			Error:      []byte(errs.InvalidServiceName.Error()),
+		}
 	}
 	return stub.Invoke(ctx, req)
+}
+
+// NewServer instance
+func NewServer() *Server {
+	res := &Server{
+		services: make(map[string]*reflectionStub, 8),
+		// A byte can have up to 256 implementations, which can be directly made into a simple bit array
+		// 一个字节，最多有 256 个实现，直接做成一个简单的 bit array 的东西
+		serializers: make([]serialize.Serializer, 256),
+		compressors: make([]compress.Compressor, 256),
+	}
+	// Register the most basic serialization protocol
+	res.RegisterSerializer(json.Serializer{})
+	res.RegisterCompressor(compress.DoNothingCompressor{})
+	return res
+}
+
+// RegisterService -> Service stub
+func (s *Server) RegisterService(service Service) error {
+	val := reflect.ValueOf(service)
+	typ := reflect.TypeOf(service)
+	methods := make(map[string]reflect.Value, val.NumMethod())
+	for i := 0; i < val.NumMethod(); i++ {
+		methodTyp := typ.Method(i)
+		methods[methodTyp.Name] = val.Method(i)
+	}
+	s.services[service.Name()] = &reflectionStub{
+		s:           service,
+		methods:     methods,
+		serializers: s.serializers,
+		compressors: s.compressors,
+	}
+	return nil
+}
+
+// MustRegister -> panic error
+func (s *Server) MustRegister(service Service) {
+	err := s.RegisterService(service)
+	if err != nil {
+		panic(err)
+	}
+}
+
+// RegisterSerializer -> register serializer
+func (s *Server) RegisterSerializer(serializer serialize.Serializer) {
+	s.serializers[serializer.Code()] = serializer
+}
+
+// RegisterCompressor -> register compressor
+func (s *Server) RegisterCompressor(compressor compress.Compressor) {
+	s.compressors[compressor.Code()] = compressor
 }
 
 // reflectionStub -> service stub
@@ -190,8 +190,8 @@ type reflectionStub struct {
 }
 
 // Invoke -> stub execute method by reflect
-func (s *reflectionStub) Invoke(ctx context.Context, req *message.Request) *message.Response {
-	response := &message.Response{
+func (s *reflectionStub) Invoke(ctx context.Context, req *message2.Request) *message2.Response {
+	response := &message2.Response{
 		Version:    req.Version,
 		Compresser: req.Compresser,
 		// Theoretically, you can use another serialization protocol here,
@@ -199,22 +199,20 @@ func (s *reflectionStub) Invoke(ctx context.Context, req *message.Request) *mess
 		Serializer: req.Serializer,
 		MessageId:  req.MessageId,
 	}
-	method, ok := s.methods[req.Method]
+	method, ok := s.methods[req.MethodName]
 	if !ok {
-		response.Error = []byte(
-			errs.NotFoundServiceMethod(req.Method).Error())
+		response.Error = []byte(errs.NotFoundServiceMethod(req.MethodName).Error())
 		return response
 	}
 	in := reflect.New(method.Type().In(1).Elem())
 
 	// decompress request data
 	compresser := s.compressors[req.Compresser]
-	reqData, err := compresser.Uncompress(req.Data)
+	reqData, err := compresser.UnCompress(req.Data)
 	if err != nil {
 		response.Error = []byte(err.Error())
 		return response
 	}
-
 	// deserialize Request Data
 	// err := json.Unmarshal(reqData, in.Interface())
 	serializer := s.serializers[req.Serializer]
@@ -223,16 +221,11 @@ func (s *reflectionStub) Invoke(ctx context.Context, req *message.Request) *mess
 		response.Error = []byte(err.Error())
 		return response
 	}
-
-	res := method.Call(
-		[]reflect.Value{reflect.ValueOf(ctx), in})
-
+	res := method.Call([]reflect.Value{reflect.ValueOf(ctx), in})
 	if len(res) > 1 && res[1].Interface() != nil {
-		response.Error = []byte(
-			res[1].Interface().(error).Error())
+		response.Error = []byte(res[1].Interface().(error).Error())
 		return response
 	}
-
 	// serialize response data
 	respData, err := serializer.Encode(res[0].Interface())
 	if err != nil {
@@ -240,14 +233,12 @@ func (s *reflectionStub) Invoke(ctx context.Context, req *message.Request) *mess
 		response.Error = []byte(err.Error())
 		return response
 	}
-
 	// compress response data
 	respData, err = compresser.Compress(respData)
 	if err != nil {
 		response.Error = []byte(err.Error())
 		return response
 	}
-
 	response.Data = respData
 	return response
 }

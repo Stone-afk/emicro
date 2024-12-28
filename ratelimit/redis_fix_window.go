@@ -37,9 +37,9 @@ func NewRedisFixWindowLimiter(client redis.Cmdable, key string, maxRate int, int
 	}
 }
 
-func (l *RedisFixWindowLimiter) LimitUnary() grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{},
-		info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+func (l *RedisFixWindowLimiter) BuildServerInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler) (resp interface{}, err error) {
 		// 这里直接占了坑
 		limit, err := l.limit(ctx)
 		if err != nil {

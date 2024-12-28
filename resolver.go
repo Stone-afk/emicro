@@ -5,33 +5,29 @@ import (
 	"emicro/registry"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/resolver"
-	"log"
 	"time"
 )
 
+var (
+	_ resolver.Builder  = (*grpcResolverBuilder)(nil)
+	_ resolver.Resolver = (*grpcResolver)(nil)
+)
+
 type grpcResolverBuilder struct {
-	r       registry.Registry
-	timeout time.Duration
+	registry registry.Registry
+	timeout  time.Duration
 }
 
-func NewResolverBuilder(r registry.Registry, timeout time.Duration) resolver.Builder {
-	return &grpcResolverBuilder{
-		r:       r,
-		timeout: timeout,
-	}
-}
-
-func (r *grpcResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+func (b *grpcResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 	res := &grpcResolver{
-		target:   target,
 		cc:       cc,
-		registry: r.r,
-		close:    make(chan struct{}, 1),
-		timeout:  r.timeout,
+		target:   target,
+		timeout:  b.timeout,
+		registry: b.registry,
 	}
 	res.resolve()
-	err := res.watch()
-	return res, err
+	go res.watch()
+	return res, nil
 }
 
 // 伪代码
@@ -46,17 +42,24 @@ func (r *grpcResolverBuilder) Build(target resolver.Target, cc resolver.ClientCo
 // }
 
 // Scheme 返回一个固定的值，registry 代表的是我们设计的注册中心
-func (r *grpcResolverBuilder) Scheme() string {
+func (b *grpcResolverBuilder) Scheme() string {
 	return "registry"
 }
 
+func NewResolverBuilder(registry registry.Registry, timeout time.Duration) resolver.Builder {
+	return &grpcResolverBuilder{registry: registry, timeout: timeout}
+}
+
 type grpcResolver struct {
+	// - "dns://some_authority/foo.bar"
+	//   Target{Scheme: "dns", Authority: "some_authority", Endpoint: "foo.bar"}
+	// registry:///localhost:8081
+	// builder *resolver.Builder
 	target   resolver.Target
-	cc       resolver.ClientConn
 	registry registry.Registry
+	cc       resolver.ClientConn
 	timeout  time.Duration
 	close    chan struct{}
-	// builder *resolver.Builder
 }
 
 // ResolveNow 立刻解析——立刻执行服务发现——立刻去问一下注册中心
@@ -67,23 +70,21 @@ func (r *grpcResolver) ResolveNow(options resolver.ResolveNowOptions) {
 
 func (r *grpcResolver) resolve() {
 	serviceName := r.target.Endpoint
-	// 这个就是可用服务实例（节点）列表
-	// 你要考虑设置超时
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
+	defer cancel()
 	instances, err := r.registry.ListServices(ctx, serviceName)
-	cancel()
 	if err != nil {
 		r.cc.ReportError(err)
+		return
 	}
 	address := make([]resolver.Address, 0, len(instances))
-	for _, ins := range instances {
-		address = append(address, newAddress(ins))
+	for _, si := range instances {
+		address = append(address, newAddress(si))
 	}
-	err = r.cc.UpdateState(resolver.State{
-		Addresses: address,
-	})
+	err = r.cc.UpdateState(resolver.State{Addresses: address})
 	if err != nil {
 		r.cc.ReportError(err)
+		return
 	}
 }
 
@@ -98,52 +99,56 @@ func newAddress(ins registry.ServiceInstance) resolver.Address {
 	}
 }
 
-func (r *grpcResolver) watch() error {
+func (r *grpcResolver) watch() {
 	events, err := r.registry.Subscribe(r.target.Endpoint)
 	if err != nil {
-		return err
+		//return err
+		r.cc.ReportError(err)
+		return
 	}
-	go func() {
-		for {
-			select {
-			case event := <-events:
-				// 做法一：立刻更新可用节点列表
-				// 这种是幂等的
-
-				// 在这里引入重试的机制
-				r.resolve()
-				// 做法二：精细化做法，非常依赖于事件顺序
-				// 你这里收到的事件的顺序，要和在注册中心上发生的顺序一样
-				// 少访问一次注册中心
-				// switch event.Type {
-				// case registry.EventTypeAdd:
-				// 	state.Addresses = append(state.Addresses, resolver.Address{
-				// 	Addr: event.Instance.Address,
-				// 	})
-				// 	cc.UpdateState(state)
-				// 	// cc.AddAddress
-				// case registry.EventTypeDelete:
-				// 	event.Instance // 这是被删除的节点
-				// case registry.EventTypeUpdate:
-				// 	event.Instance // 这是被更新的，而且是更新后的节点
-				//
-				// }
-				log.Println(event)
-			case <-r.close:
-				close(r.close)
-				return
-			}
+	//go func() {
+	//	for {
+	//		select {
+	//		case <-events:
+	//			r.resolve()
+	//		case <-r.close:
+	//			close(r.close)
+	//			return
+	//		}
+	//	}
+	//}()
+	for {
+		select {
+		case <-events:
+			// 做法一：立刻更新可用节点列表
+			// 这种是幂等的
+			// 在这里引入重试的机制
+			r.resolve()
+			// 做法二：精细化做法，非常依赖于事件顺序
+			// 你这里收到的事件的顺序，要和在注册中心上发生的顺序一样
+			// 少访问一次注册中心
+			// switch event.Type {
+			// case registry.EventTypeAdd:
+			// 	state.Addresses = append(state.Addresses, resolver.Address{
+			// 	Addr: event.Instance.Address,
+			// 	})
+			// 	cc.UpdateState(state)
+			// 	// cc.AddAddress
+			// case registry.EventTypeDelete:
+			// 	event.Instance // 这是被删除的节点
+			// case registry.EventTypeUpdate:
+			// 	event.Instance // 这是被更新的，而且是更新后的节点
+			//
+			// }
+		case <-r.close:
+			close(r.close)
 		}
-	}()
-
-	return nil
+	}
 }
 
 // Close closes the resolver.
 func (r *grpcResolver) Close() {
 	// 有一个隐含的假设，就是 grpc 只会调用这个方法一次
-	// r.close <- struct{}{}
-
-	// close(r.close)
 	r.close <- struct{}{}
+	//close(r.close)
 }

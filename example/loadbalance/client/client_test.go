@@ -2,11 +2,11 @@ package client
 
 import (
 	"context"
+	v5 "emicro"
 	gen2 "emicro/example/proto/gen"
-	v5 "emicro/v5"
-	"emicro/v5/loadbalance"
-	"emicro/v5/loadbalance/roundrobin"
-	"emicro/v5/registry/etcd"
+	"emicro/loadbalance"
+	"emicro/loadbalance/roundrobin"
+	"emicro/registry/etcd"
 	"encoding/json"
 	"github.com/stretchr/testify/require"
 	clientv3 "go.etcd.io/etcd/client/v3"

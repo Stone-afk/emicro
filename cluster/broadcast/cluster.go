@@ -2,7 +2,7 @@ package broadcast
 
 import (
 	"context"
-	"emicro/v5/registry"
+	"emicro/registry"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 )

@@ -1,13 +1,9 @@
-//go:build e2e
-
 package ratelimit
 
 import (
 	"context"
 	"emicro/proto/gen"
-	"emicro/ratelimit"
 	"errors"
-	"github.com/go-redis/redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -15,11 +11,9 @@ import (
 	"time"
 )
 
-func TestRedisSlideWindowLimiter_BuildServerInterceptor(t *testing.T) {
-	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-	})
-	interceptor := ratelimit.NewRedisSlideWindowLimiter(rdb, "user-service", 1, time.Second*3).BuildServerInterceptor()
+func TestSlideWindowBuildInterceptor(t *testing.T) {
+	// 三秒钟只能有一个请求
+	interceptor := NewSlideWindowLimiter(1, time.Second*3).BuildServerInterceptor()
 	cnt := 0
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		cnt++
@@ -30,7 +24,7 @@ func TestRedisSlideWindowLimiter_BuildServerInterceptor(t *testing.T) {
 	assert.Equal(t, &gen.GetByIdResp{}, resp)
 
 	resp, err = interceptor(context.Background(), &gen.GetByIdReq{}, &grpc.UnaryServerInfo{}, handler)
-	require.Equal(t, errors.New("触及了瓶颈"), err)
+	require.Equal(t, errors.New("到达瓶颈"), err)
 	assert.Nil(t, resp)
 
 	// 睡一个三秒，确保窗口新建了
