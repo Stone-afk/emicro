@@ -5,24 +5,23 @@ import (
 	"google.golang.org/grpc"
 )
 
-type MethodLimiter struct {
-	Limiter
+type ServerMethodLimiter struct {
+	ServerLimiter
 	FullMethod string
 }
 
-//// NewMethodLimiter 隔多久产生一个令牌
-//func NewMethodLimiter(fullMethod string, limiter Limiter) *MethodLimiter {
-//	return &MethodLimiter{
-//		Limiter: limiter,
-//		FullMethod: fullMethod,
-//	}
-//}
+// NewServerMethodLimiter 隔多久产生一个令牌
+func NewServerMethodLimiter(fullMethod string, limiter ServerLimiter) *ServerMethodLimiter {
+	return &ServerMethodLimiter{
+		ServerLimiter: limiter,
+		FullMethod:    fullMethod,
+	}
+}
 
-func (m *MethodLimiter) LimitUnary() grpc.UnaryServerInterceptor {
-	interceptor := m.Limiter.LimitUnary()
-	return func(ctx context.Context, req interface{},
-		info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-		if info.FullMethod == m.FullMethod {
+func (l *ServerMethodLimiter) BuildServerInterceptor() grpc.UnaryServerInterceptor {
+	interceptor := l.ServerLimiter.BuildServerInterceptor()
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+		if info.FullMethod == l.FullMethod {
 			return interceptor(ctx, req, info, handler)
 		}
 		return handler(ctx, req)

@@ -4,7 +4,8 @@ import (
 	"context"
 	"emicro/rpc/compress"
 	"emicro/rpc/compress/gzip"
-	"emicro/rpc/message"
+	message2 "emicro/rpc/message"
+	"emicro/rpc/tcp"
 	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
@@ -17,7 +18,7 @@ import (
 )
 
 func TestServer_handleConnection(t *testing.T) {
-	testServerHandleConnection(t, gzip.GzipCompressor{})
+	testServerHandleConnection(t, gzip.Compressor{})
 }
 
 func testServerHandleConnection(t *testing.T, c compress.Compressor) {
@@ -48,7 +49,7 @@ func testServerHandleConnection(t *testing.T, c compress.Compressor) {
 		require.NoError(t, err)
 		err = server.TestHandleConn(tc.conn)
 		require.NoError(t, err)
-		resp := message.DecodeResp(tc.conn.writeData)
+		resp := message2.DecodeResp(tc.conn.writeData)
 		assert.Equal(t, tc.wantResp, resp.Data)
 
 	}
@@ -57,7 +58,7 @@ func testServerHandleConnection(t *testing.T, c compress.Compressor) {
 // handleConn -> handle tcp connection
 func (s *Server) TestHandleConn(conn net.Conn) error {
 	for {
-		bs, err := ReadMsg(conn)
+		bs, err := tcp.ReadMsg(conn)
 		if err == io.EOF {
 			continue
 		}
@@ -65,7 +66,7 @@ func (s *Server) TestHandleConn(conn net.Conn) error {
 			return fmt.Errorf("emicro: server sending response failed: %v", err)
 		}
 
-		req := message.DecodeReq(bs)
+		req := message2.DecodeReq(bs)
 		ctx := context.Background()
 		deadline, err := strconv.ParseInt(req.Meta["deadline"], 10, 64)
 		cancel := func() {}
@@ -83,10 +84,10 @@ func (s *Server) TestHandleConn(conn net.Conn) error {
 		}
 
 		// calculate and set the response head length
-		resp.SetHeadLength()
+		resp.CalculateHeaderLength()
 		// calculate and set the response body length
-		resp.SetBodyLength()
-		encode := message.EncodeResp(resp)
+		resp.CalculateBodyLength()
+		encode := message2.EncodeResp(resp)
 		_, er := conn.Write(encode)
 		if er != nil {
 			return fmt.Errorf("emicro: server sending response failed: %v", er)
@@ -106,10 +107,9 @@ type mockConn struct {
 	writeErr  error
 }
 
-type UserService struct {
-}
+type UserService struct{}
 
-func (u *UserService) ServiceName() string {
+func (u *UserService) Name() string {
 	return "user-service"
 }
 
@@ -119,22 +119,30 @@ func (u *UserService) GetById(ctx context.Context, request *AnyRequest) (*AnyRes
 	}, nil
 }
 
+type AnyRequest struct {
+	Msg string `json:"msg"`
+}
+
+type AnyResponse struct {
+	Msg string `json:"msg"`
+}
+
 func newRequestBytes(t *testing.T, service string, method string, input any, c compress.Compressor) []byte {
 	data, err := json.Marshal(input)
 	require.NoError(t, err)
 	data, err = c.Compress(data)
 	require.NoError(t, err)
-	req := &message.Request{
+	req := &message2.Request{
 		ServiceName: service,
-		Method:      method,
+		MethodName:  method,
 		Data:        data,
 		// 固定用 json
 		Serializer: 1,
 		Compresser: 1,
 	}
-	req.SetHeadLength()
-	req.SetBodyLength()
-	return message.EncodeReq(req)
+	req.CalculateHeaderLength()
+	req.CalculateBodyLength()
+	return message2.EncodeReq(req)
 }
 
 func (m *mockConn) Read(bs []byte) (int, error) {

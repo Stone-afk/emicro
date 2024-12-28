@@ -5,15 +5,6 @@ import (
 	"io"
 )
 
-//go:generate mockgen -package=mocks -destination=mocks/registry.mock.go -source=types.go Registry
-type Registry interface {
-	Register(ctx context.Context, inst ServiceInstance) error
-	Unregister(ctx context.Context, ins ServiceInstance) error
-	ListServices(ctx context.Context, serviceName string) ([]ServiceInstance, error)
-	Subscribe(serviceName string) (<-chan Event, error)
-	io.Closer
-}
-
 type ServiceInstance struct {
 	Name    string
 	Address string
@@ -31,7 +22,17 @@ const (
 
 type Event struct {
 	Type     EventType
-	Insrance ServiceInstance
+	Instance ServiceInstance
+	Error    error
+}
+
+//go:generate mockgen -package=mocks -destination=mocks/registry.mock.go -source=types.go Registry
+type Registry interface {
+	io.Closer
+	Register(ctx context.Context, ins ServiceInstance) error
+	Unregister(ctx context.Context, ins ServiceInstance) error
+	ListServices(ctx context.Context, serviceName string) ([]ServiceInstance, error)
+	Subscribe(serviceName string) (<-chan Event, error)
 }
 
 type RegistryV1 interface {

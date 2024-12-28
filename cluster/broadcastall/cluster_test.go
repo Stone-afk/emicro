@@ -2,9 +2,9 @@ package broadcastall
 
 import (
 	"context"
-	v5 "emicro/v5"
-	"emicro/v5/proto/gen"
-	"emicro/v5/registry/etcd"
+	"emicro"
+	gen2 "emicro/proto/gen"
+	"emicro/registry/etcd"
 	"fmt"
 	"github.com/stretchr/testify/require"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -25,12 +25,12 @@ func TestUseBroadCast(t *testing.T) {
 	var eg errgroup.Group
 	var servers []*UserServiceServer
 	for i := 0; i < 3; i++ {
-		server := v5.NewServer("user-service", v5.ServerWithRegistry(r))
+		server := emicro.NewServer("user-service", emicro.ServerWithRegistry(r))
 		us := &UserServiceServer{
 			idx: i,
 		}
 		servers = append(servers, us)
-		gen.RegisterUserServiceServer(server, us)
+		gen2.RegisterUserServiceServer(server, us)
 		// 启动 8081,8082, 8083 三个端口
 		port := fmt.Sprintf(":808%d", i+1)
 		eg.Go(func() error {
@@ -42,7 +42,7 @@ func TestUseBroadCast(t *testing.T) {
 	}
 	time.Sleep(time.Second * 3)
 
-	client := v5.NewClient(v5.ClientWithInsecure(), v5.ClientWithRegistry(r, time.Second*3))
+	client := emicro.NewClient(emicro.ClientWithInsecure(), emicro.ClientWithRegistry(r, time.Second*3))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	require.NoError(t, err)
@@ -55,8 +55,8 @@ func TestUseBroadCast(t *testing.T) {
 	bd := NewClusterBuilder(r, "user-service", grpc.WithInsecure())
 	cc, err := client.Dial(ctx, "user-service", grpc.WithUnaryInterceptor(bd.BuildUnaryClientInterceptor()))
 	require.NoError(t, err)
-	uc := gen.NewUserServiceClient(cc)
-	resp, err := uc.GetById(ctx, &gen.GetByIdReq{Id: 13})
+	uc := gen2.NewUserServiceClient(cc)
+	resp, err := uc.GetById(ctx, &gen2.GetByIdReq{Id: 13})
 	require.NoError(t, err)
 	t.Log(resp)
 	for _, s := range servers {
@@ -67,13 +67,13 @@ func TestUseBroadCast(t *testing.T) {
 type UserServiceServer struct {
 	idx int
 	cnt int
-	gen.UnimplementedUserServiceServer
+	gen2.UnimplementedUserServiceServer
 }
 
-func (s *UserServiceServer) GetById(ctx context.Context, req *gen.GetByIdReq) (*gen.GetByIdResp, error) {
+func (s *UserServiceServer) GetById(ctx context.Context, req *gen2.GetByIdReq) (*gen2.GetByIdResp, error) {
 	s.cnt++
-	return &gen.GetByIdResp{
-		User: &gen.User{
+	return &gen2.GetByIdResp{
+		User: &gen2.User{
 			Name: fmt.Sprintf("hello, world %d", s.idx),
 		},
 	}, nil

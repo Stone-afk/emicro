@@ -9,7 +9,7 @@ import (
 	"emicro/registry"
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockRegistry is a mock of Registry interface.

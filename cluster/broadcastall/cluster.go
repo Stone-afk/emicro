@@ -2,7 +2,7 @@ package broadcastall
 
 import (
 	"context"
-	"emicro/v5/registry"
+	"emicro/registry"
 	"fmt"
 	"google.golang.org/grpc"
 	"reflect"
